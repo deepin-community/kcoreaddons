@@ -21,7 +21,7 @@ class QHash;
 class KMacroExpanderBasePrivate;
 
 /**
- * \class KMacroExpanderBase kmacroexpander.h <KMacroExpanderBase>
+ * \class KMacroExpanderBase kmacroexpander.h <KMacroExpander>
  *
  * Abstract base class for the worker classes behind the KMacroExpander namespace
  * and the KCharMacroExpander and KWordMacroExpander classes.
@@ -227,7 +227,7 @@ protected:
      * @param str the macro to expand
      * @param ret return variable reference. It is guaranteed to be empty
      *  when expandMacro is entered.
-     * @return @c true iff @p chr was a recognized macro name
+     * @return @c true iff @p str was a recognized macro name
      */
     virtual bool expandMacro(const QString &str, QStringList &ret) = 0;
 };
@@ -316,9 +316,9 @@ KCOREADDONS_EXPORT QString expandMacros(const QString &str, const QHash<QChar, Q
  * QHash<QChar,QString> map;
  * map.insert('u', "/tmp/myfile.txt");
  * map.insert('n', "My File");
- * QString s = "kedit --caption %n %u";
+ * QString s = "kwrite --qwindowtitle %n %u";
  * s = KMacroExpander::expandMacrosShellQuote(s, map);
- * // s is now "kedit --caption 'My File' '/tmp/myfile.txt'";
+ * // s is now "kwrite --qwindowtitle 'My File' '/tmp/myfile.txt'";
  * system(QFile::encodeName(s));
  * \endcode
  */
@@ -370,9 +370,9 @@ KCOREADDONS_EXPORT QString expandMacros(const QString &str, const QHash<QString,
  * QHash<QString,QString> map;
  * map.insert("url", "/tmp/myfile.txt");
  * map.insert("name", "My File");
- * QString s = "kedit --caption %name %{url}";
+ * QString s = "kwrite --qwindowtitle %name %{url}";
  * s = KMacroExpander::expandMacrosShellQuote(s, map);
- * // s is now "kedit --caption 'My File' '/tmp/myfile.txt'";
+ * // s is now "kwrite --qwindowtitle 'My File' '/tmp/myfile.txt'";
  * system(QFile::encodeName(s));
  * \endcode
  */

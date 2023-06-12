@@ -21,7 +21,6 @@
 #include <QMutex>
 #include <QRegularExpression>
 #include <QRegularExpressionMatch>
-#include <QStandardPaths>
 
 #ifdef BUILDING_DESKTOPTOJSON_TOOL
 // use if not else to prevent wrong scoping
@@ -283,29 +282,35 @@ bool tokenizeKeyValue(QFile &df, const QString &src, QByteArray &key, QString &v
     return true;
 }
 
-static constexpr const char KSERVICESTYPES_PATH[] = "kservicetypes" QT_STRINGIFY(QT_VERSION_MAJOR) "/";
+#define KSERVICETYPES_SUBDIR "kservicetypes" QT_STRINGIFY(QT_VERSION_MAJOR) "/"
 
-static QString locateRelativeServiceType(const QString &relPath)
+static QString locateRelativeServiceType(const QString &relPath, const QStringList &serviceTypeSearchPaths)
 {
-    return QStandardPaths::locate(QStandardPaths::GenericDataLocation, QLatin1String(KSERVICESTYPES_PATH) + relPath);
+    for (const auto &dir : serviceTypeSearchPaths) {
+        QString path = dir + QLatin1String("/" KSERVICETYPES_SUBDIR) + relPath;
+        if (QFile::exists(path)) {
+            return path;
+        }
+    }
+    return QString();
 }
 
-static ServiceTypeDefinition *parseServiceTypesFile(const QString &inputPath)
+static ServiceTypeDefinition *parseServiceTypesFile(const QString &inputPath, const QStringList &serviceTypeSearchPaths)
 {
     int lineNr = 0;
     QString path = inputPath;
     if (QDir::isRelativePath(path)) {
-        path = locateRelativeServiceType(path);
+        path = locateRelativeServiceType(path, serviceTypeSearchPaths);
         QString rcPath;
         if (path.isEmpty()) {
-            rcPath = QLatin1String(":/") + QLatin1String(KSERVICESTYPES_PATH) + inputPath;
+            rcPath = QLatin1String(":/" KSERVICETYPES_SUBDIR) + inputPath;
             if (QFileInfo::exists(rcPath)) {
                 path = rcPath;
             }
         }
         if (path.isEmpty()) {
-            qCWarning(DESKTOPPARSER).nospace() << "Could not locate service type file " << KSERVICESTYPES_PATH << qPrintable(inputPath) << ", tried "
-                                               << QStandardPaths::standardLocations(QStandardPaths::GenericDataLocation) << " and " << rcPath;
+            qCWarning(DESKTOPPARSER).nospace() << "Could not locate service type file " << KSERVICETYPES_SUBDIR << qPrintable(inputPath) << ", tried "
+                                               << serviceTypeSearchPaths << " and " << rcPath;
             return nullptr;
         }
     }
@@ -323,14 +328,14 @@ static ServiceTypeDefinition *parseServiceTypesFile(const QString &inputPath)
     QByteArray nextGroup = "Desktop Entry";
     // Type must be ServiceType now
     QByteArray typeStr = readTypeEntryForCurrentGroup(df, &nextGroup, &result.m_serviceTypeName);
-    if (typeStr != QByteArrayLiteral("ServiceType")) {
+    if (typeStr != "ServiceType") {
         qCWarning(DESKTOPPARSER) << path << "is not a valid service type: Type entry should be 'ServiceType', got" << typeStr << "instead.";
         return nullptr;
     }
     while (!df.atEnd()) {
         QByteArray currentGroup = nextGroup;
         typeStr = readTypeEntryForCurrentGroup(df, &nextGroup, nullptr);
-        if (!currentGroup.startsWith(QByteArrayLiteral("PropertyDef::"))) {
+        if (!currentGroup.startsWith("PropertyDef::")) {
             qCWarning(DESKTOPPARSER) << "Skipping invalid group" << currentGroup << "in service type" << path;
             continue;
         }
@@ -370,13 +375,13 @@ Q_GLOBAL_STATIC(ServiceTypesHash, s_serviceTypes)
 QBasicMutex s_serviceTypesMutex;
 } // end of anonymous namespace
 
-ServiceTypeDefinitions ServiceTypeDefinitions::fromFiles(const QStringList &paths)
+ServiceTypeDefinitions ServiceTypeDefinitions::fromFiles(const QStringList &paths, const QStringList &serviceTypesSearchPaths)
 {
     ServiceTypeDefinitions ret;
     ret.m_definitions.reserve(paths.size());
     // as we might modify the cache we need to acquire a mutex here
     for (const QString &serviceTypePath : paths) {
-        bool added = ret.addFile(serviceTypePath);
+        bool added = ret.addFile(serviceTypePath, serviceTypesSearchPaths);
         if (!added) {
 #ifdef BUILDING_DESKTOPTOJSON_TOOL
             exit(1); // this is a fatal error when using kcoreaddons_desktop_to_json()
@@ -386,7 +391,7 @@ ServiceTypeDefinitions ServiceTypeDefinitions::fromFiles(const QStringList &path
     return ret;
 }
 
-bool ServiceTypeDefinitions::addFile(const QString &path)
+bool ServiceTypeDefinitions::addFile(const QString &path, const QStringList &serviceTypesSearchPaths)
 {
     QMutexLocker lock(&s_serviceTypesMutex);
     ServiceTypeDefinition *def = s_serviceTypes->object(path);
@@ -397,7 +402,7 @@ bool ServiceTypeDefinitions::addFile(const QString &path)
     } else {
         // not found in cache -> we need to parse the file
         qCDebug(DESKTOPPARSER) << "About to parse service type file" << path;
-        def = parseServiceTypesFile(path);
+        def = parseServiceTypesFile(path, serviceTypesSearchPaths);
         if (!def) {
             return false;
         }
@@ -408,14 +413,27 @@ bool ServiceTypeDefinitions::addFile(const QString &path)
     return true;
 }
 
-QJsonValue ServiceTypeDefinitions::parseValue(const QByteArray &key, const QString &value) const
+QJsonValue ServiceTypeDefinitions::parseValue(const QByteArray &aKey, const QString &value) const
 {
+    QByteArray key = aKey;
+    // Remove translation markers "X-KDE-Keywords[en_GB]"
+    const int startIdx = key.indexOf('[');
+    if (startIdx != -1) {
+        Q_ASSERT(key.endsWith(']'));
+        key.truncate(startIdx);
+    }
+
+    auto findKey = [&key](const ServiceTypeDefinition &def) {
+        return std::find_if(def.m_propertyDefs.cbegin(), def.m_propertyDefs.cend(), [&key](const CustomPropertyDefinition &propertyDef) {
+            return propertyDef.key == key;
+        });
+    };
+
     // check whether the key has a special type associated with it
     for (const auto &def : m_definitions) {
-        for (const CustomPropertyDefinition &propertyDef : def.m_propertyDefs) {
-            if (propertyDef.key == key) {
-                return propertyDef.fromString(value);
-            }
+        auto it = findKey(def);
+        if (it != def.m_propertyDefs.cend()) {
+            return it->fromString(value);
         }
     }
     qCDebug(DESKTOPPARSER) << "Unknown property type for key" << key << "-> falling back to string";
@@ -461,43 +479,43 @@ void DesktopFileParser::convertToJson(const QByteArray &key,
         X-KDE-PluginInfo-EnabledByDefault=true
         X-KDE-FormFactors=desktop
     */
-    if (key == QByteArrayLiteral("Icon")) {
+    if (key == "Icon") {
         kplugin[QStringLiteral("Icon")] = value;
-    } else if (key == QByteArrayLiteral("X-KDE-PluginInfo-Name")) {
+    } else if (key == "X-KDE-PluginInfo-Name") {
         kplugin[QStringLiteral("Id")] = value;
-    } else if (key == QByteArrayLiteral("X-KDE-PluginInfo-Category")) {
+    } else if (key == "X-KDE-PluginInfo-Category") {
         kplugin[QStringLiteral("Category")] = value;
-    } else if (key == QByteArrayLiteral("X-KDE-PluginInfo-License")) {
+    } else if (key == "X-KDE-PluginInfo-License") {
         kplugin[QStringLiteral("License")] = value;
-    } else if (key == QByteArrayLiteral("X-KDE-PluginInfo-Copyright")) {
+    } else if (key == "X-KDE-PluginInfo-Copyright") {
         kplugin[QStringLiteral("Copyright")] = value;
-    } else if (key.startsWith(QByteArrayLiteral("X-KDE-PluginInfo-Copyright["))) {
+    } else if (key.startsWith("X-KDE-PluginInfo-Copyright[")) {
         const QString languageSuffix = QString::fromUtf8(key.mid(qstrlen("X-KDE-PluginInfo-Copyright")));
         kplugin[QStringLiteral("Copyright") + languageSuffix] = value;
-    } else if (key == QByteArrayLiteral("X-KDE-PluginInfo-Version")) {
+    } else if (key == "X-KDE-PluginInfo-Version") {
         kplugin[QStringLiteral("Version")] = value;
-    } else if (key == QByteArrayLiteral("X-KDE-PluginInfo-Website")) {
+    } else if (key == "X-KDE-PluginInfo-Website") {
         kplugin[QStringLiteral("Website")] = value;
     }
 #if KCOREADDONS_BUILD_DEPRECATED_SINCE(5, 79)
-    else if (key == QByteArrayLiteral("X-KDE-PluginInfo-Depends")) {
+    else if (key == "X-KDE-PluginInfo-Depends") {
         kplugin[QStringLiteral("Dependencies")] = QJsonArray::fromStringList(deserializeList(value));
         qCDebug(DESKTOPPARSER) << "The X-KDE-PluginInfo-Depends property is deprecated and will be removed in KF6";
     }
 #endif
-    else if (key == QByteArrayLiteral("X-KDE-ServiceTypes") || key == QByteArrayLiteral("ServiceTypes")) {
+    else if (key == "X-KDE-ServiceTypes" || key == "ServiceTypes") {
         // NOTE: "X-KDE-ServiceTypes" and "ServiceTypes" were already managed in the first parse step, so this second one is almost a noop
         const auto services = deserializeList(value);
         kplugin[QStringLiteral("ServiceTypes")] = QJsonArray::fromStringList(services);
-    } else if (key == QByteArrayLiteral("MimeType")) {
+    } else if (key == "MimeType") {
         // MimeType is a XDG string list and not a KConfig list so we need to use ';' as the separator
         kplugin[QStringLiteral("MimeTypes")] = QJsonArray::fromStringList(deserializeList(value, ';'));
         // make sure that applications using kcoreaddons_desktop_to_json() that depend on reading
         // the MimeType property still work (see https://git.reviewboard.kde.org/r/125527/)
         json[QStringLiteral("MimeType")] = value; // TODO KF6 remove this compatibility code
-    } else if (key == QByteArrayLiteral("X-KDE-FormFactors")) {
+    } else if (key == "X-KDE-FormFactors") {
         kplugin[QStringLiteral("FormFactors")] = QJsonArray::fromStringList(deserializeList(value));
-    } else if (key == QByteArrayLiteral("X-KDE-PluginInfo-EnabledByDefault")) {
+    } else if (key == "X-KDE-PluginInfo-EnabledByDefault") {
         bool boolValue = false;
         // should only be lower case, but be tolerant here
         if (value.toLower() == QLatin1String("true")) {
@@ -509,21 +527,21 @@ void DesktopFileParser::convertToJson(const QByteArray &key,
             }
         }
         kplugin[QStringLiteral("EnabledByDefault")] = boolValue;
-    } else if (key == QByteArrayLiteral("X-KDE-PluginInfo-Author")) {
+    } else if (key == "X-KDE-PluginInfo-Author") {
         QJsonObject authorsObject = kplugin.value(QStringLiteral("Authors")).toArray().at(0).toObject();
         // if the authors object doesn't exist yet this will create it
         authorsObject[QStringLiteral("Name")] = value;
         QJsonArray array;
         array.append(authorsObject);
         kplugin[QStringLiteral("Authors")] = array;
-    } else if (key == QByteArrayLiteral("X-KDE-PluginInfo-Email")) {
+    } else if (key == "X-KDE-PluginInfo-Email") {
         QJsonObject authorsObject = kplugin.value(QStringLiteral("Authors")).toArray().at(0).toObject();
         // if the authors object doesn't exist yet this will create it
         authorsObject[QStringLiteral("Email")] = value;
         QJsonArray array;
         array.append(authorsObject);
         kplugin[QStringLiteral("Authors")] = array;
-    } else if (key == QByteArrayLiteral("X-KDE-PluginInfo-Authors")) {
+    } else if (key == "X-KDE-PluginInfo-Authors") {
         const auto authors = deserializeList(value);
         QJsonArray oldArray = kplugin.value(QStringLiteral("Authors")).toArray();
         QJsonArray newArray;
@@ -534,7 +552,7 @@ void DesktopFileParser::convertToJson(const QByteArray &key,
             newArray.append(authorsObject);
         }
         kplugin[QStringLiteral("Authors")] = newArray;
-    } else if (key == QByteArrayLiteral("X-KDE-PluginInfo-Emails")) {
+    } else if (key == "X-KDE-PluginInfo-Emails") {
         const auto emails = deserializeList(value);
         QJsonArray oldArray = kplugin.value(QStringLiteral("Authors")).toArray();
         QJsonArray newArray;
@@ -545,21 +563,20 @@ void DesktopFileParser::convertToJson(const QByteArray &key,
             newArray.append(authorsObject);
         }
         kplugin[QStringLiteral("Authors")] = newArray;
-    } else if (key == QByteArrayLiteral("Name") || key.startsWith(QByteArrayLiteral("Name["))) {
+    } else if (key == "Name" || key.startsWith("Name[")) {
         // TODO: also handle GenericName? does that make any sense, or is X-KDE-PluginInfo-Category enough?
         kplugin[QString::fromUtf8(key)] = value;
-    } else if (key == QByteArrayLiteral("Comment")) {
+    } else if (key == "Comment") {
         kplugin[QStringLiteral("Description")] = value;
-    } else if (key.startsWith(QByteArrayLiteral("Comment["))) {
+    } else if (key.startsWith("Comment[")) {
         kplugin[QStringLiteral("Description") + QString::fromUtf8(key.mid(qstrlen("Comment")))] = value;
-    } else if (key == QByteArrayLiteral("InitialPreference")) {
+    } else if (key == "InitialPreference") {
         kplugin[QStringLiteral("InitialPreference")] = value.toInt();
-    } else if (key == QByteArrayLiteral("Hidden")) {
+    } else if (key == "Hidden") {
         DESKTOPTOJSON_VERBOSE_WARNING << "Hidden= key found in desktop file, this makes no sense"
                                          " with metadata inside the plugin.";
         kplugin[QString::fromUtf8(key)] = (value.toLower() == QLatin1String("true"));
-    } else if (key == QByteArrayLiteral("Exec") || key == QByteArrayLiteral("Type") || key == QByteArrayLiteral("Actions")
-               || key == QByteArrayLiteral("X-KDE-Library") || key == QByteArrayLiteral("Encoding")) {
+    } else if (key == "Exec" || key == "Type" || key == "Actions" || key == "X-KDE-Library" || key == "Encoding") {
         // Exec= doesn't make sense here, however some .desktop files (like e.g. in kdevelop) have a dummy value here
         // also the Type=Service entry is no longer needed
         // Actions= is used as hack at least with the Dolphin KPart to report the different view mode options
@@ -573,11 +590,15 @@ void DesktopFileParser::convertToJson(const QByteArray &key,
     }
 }
 
-bool DesktopFileParser::convert(const QString &src, const QStringList &serviceTypes, QJsonObject &json, QString *libraryPath)
+bool DesktopFileParser::convert(const QString &src,
+                                const QStringList &serviceTypes,
+                                QJsonObject &json,
+                                QString *libraryPath,
+                                const QStringList &serviceTypesSearchPaths)
 {
     QFile df(src);
     int lineNr = 0;
-    ServiceTypeDefinitions serviceTypeDef = ServiceTypeDefinitions::fromFiles(serviceTypes);
+    ServiceTypeDefinitions serviceTypeDef = ServiceTypeDefinitions::fromFiles(serviceTypes, serviceTypesSearchPaths);
     readUntilDesktopEntryGroup(df, src, lineNr);
     DESKTOPTOJSON_VERBOSE_DEBUG << "Found [Desktop Entry] group in line" << lineNr;
     auto startPos = df.pos();
@@ -590,7 +611,7 @@ bool DesktopFileParser::convert(const QString &src, const QStringList &serviceTy
             break;
         }
         // some .desktop files still use the legacy ServiceTypes= key
-        if (key == QByteArrayLiteral("X-KDE-ServiceTypes") || key == QByteArrayLiteral("ServiceTypes")) {
+        if (key == "X-KDE-ServiceTypes" || key == "ServiceTypes") {
             const QString dotDesktop = QStringLiteral(".desktop");
             const QChar slashChar(QLatin1Char('/'));
             const auto serviceList = deserializeList(value);
@@ -598,14 +619,16 @@ bool DesktopFileParser::convert(const QString &src, const QStringList &serviceTy
             for (const auto &service : serviceList) {
                 if (!serviceTypeDef.hasServiceType(service.toLatin1())) {
                     // Make up the filename from the service type name. This assumes consistent naming...
-                    QString absFileName = locateRelativeServiceType(service.toLower().replace(slashChar, QLatin1Char('-')) + dotDesktop);
+                    QString absFileName =
+                        locateRelativeServiceType(service.toLower().replace(slashChar, QLatin1Char('-')) + dotDesktop, serviceTypesSearchPaths);
                     if (absFileName.isEmpty()) {
-                        absFileName = locateRelativeServiceType(service.toLower().remove(slashChar) + dotDesktop);
+                        absFileName = locateRelativeServiceType(service.toLower().remove(slashChar) + dotDesktop, serviceTypesSearchPaths);
                     }
                     if (absFileName.isEmpty()) {
-                        qCWarning(DESKTOPPARSER) << "Unable to find service type for service" << service << "listed in" << src;
+                        qCWarning(DESKTOPPARSER) << "Unable to find service type for service" << service << "listed in" << src
+                                                 << "- service type search directories were" << serviceTypesSearchPaths;
                     } else {
-                        serviceTypeDef.addFile(absFileName);
+                        serviceTypeDef.addFile(absFileName, serviceTypesSearchPaths);
                     }
                 }
             }
@@ -633,7 +656,7 @@ bool DesktopFileParser::convert(const QString &src, const QStringList &serviceTy
 #else
         convertToJson(key, serviceTypeDef, value, json, kplugin, lineNr);
 #endif
-        if (libraryPath && key == QByteArrayLiteral("X-KDE-Library")) {
+        if (libraryPath && key == "X-KDE-Library") {
             *libraryPath = value;
         }
     }

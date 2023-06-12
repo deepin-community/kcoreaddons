@@ -45,29 +45,73 @@ static inline void endgrent()
 }
 #endif
 
+// Only define os_pw_size() if it's going to be used
+#if defined(_POSIX_THREAD_SAFE_FUNCTIONS) && !defined(Q_OS_OPENBSD)
+static int os_pw_size() // hint for size of passwd struct
+{
+    const int size_max = sysconf(_SC_GETPW_R_SIZE_MAX);
+    if (size_max != -1) {
+        return size_max;
+    }
+    return 1024;
+}
+#endif
+
+// Only define os_gr_size() if it's going to be used
+#if defined(_POSIX_THREAD_SAFE_FUNCTIONS) && !defined(Q_OS_OPENBSD) && (!defined(Q_OS_ANDROID) || defined(Q_OS_ANDROID) && (__ANDROID_API__ >= 24))
+static int os_gr_size() // hint for size of group struct
+{
+    const int size_max = sysconf(_SC_GETGR_R_SIZE_MAX);
+    if (size_max != -1) {
+        return size_max;
+    }
+    return 1024;
+}
+#endif
+
 class KUserPrivate : public QSharedData
 {
 public:
-    uid_t uid;
-    gid_t gid;
+    uid_t uid = uid_t(-1);
+    gid_t gid = gid_t(-1);
     QString loginName;
     QString homeDir, shell;
     QMap<KUser::UserProperty, QVariant> properties;
 
     KUserPrivate()
-        : uid(uid_t(-1))
-        , gid(gid_t(-1))
     {
     }
     KUserPrivate(const char *name)
-        : uid(uid_t(-1))
-        , gid(gid_t(-1))
     {
-        fillPasswd(name ? ::getpwnam(name) : nullptr);
+        if (!name) {
+            fillPasswd(nullptr);
+        } else {
+            struct passwd *pw = nullptr;
+#if defined(_POSIX_THREAD_SAFE_FUNCTIONS) && !defined(Q_OS_OPENBSD)
+            static const int bufsize = os_pw_size();
+            QVarLengthArray<char, 1024> buf(bufsize);
+            struct passwd entry;
+            getpwnam_r(name, &entry, buf.data(), buf.size(), &pw);
+#else
+            pw = getpwnam(name); // not thread-safe!
+#endif
+            fillPasswd(pw);
+        }
+    }
+    KUserPrivate(K_UID uid)
+    {
+        struct passwd *pw = nullptr;
+#if defined(_POSIX_THREAD_SAFE_FUNCTIONS) && !defined(Q_OS_OPENBSD)
+        static const int bufsize = os_pw_size();
+        QVarLengthArray<char, 1024> buf(bufsize);
+        struct passwd entry;
+        getpwuid_r(uid, &entry, buf.data(), buf.size(), &pw);
+#else
+        pw = getpwuid(uid); // not thread-safe!
+#endif
+        fillPasswd(pw);
     }
     KUserPrivate(const passwd *p)
-        : uid(uid_t(-1))
-        , gid(gid_t(-1))
     {
         fillPasswd(p);
     }
@@ -109,25 +153,25 @@ KUser::KUser(UIDMode mode)
     uid_t _uid = ::getuid();
     uid_t _euid;
     if (mode == UseEffectiveUID && (_euid = ::geteuid()) != _uid) {
-        d = new KUserPrivate(::getpwuid(_euid));
+        d = new KUserPrivate(_euid);
     } else {
         d = new KUserPrivate(qgetenv("LOGNAME").constData());
         if (d->uid != _uid) {
             d = new KUserPrivate(qgetenv("USER").constData());
             if (d->uid != _uid) {
-                d = new KUserPrivate(::getpwuid(_uid));
+                d = new KUserPrivate(_uid);
             }
         }
     }
 }
 
 KUser::KUser(K_UID _uid)
-    : d(new KUserPrivate(::getpwuid(_uid)))
+    : d(new KUserPrivate(_uid))
 {
 }
 
 KUser::KUser(KUserId _uid)
-    : d(new KUserPrivate(::getpwuid(_uid.nativeId())))
+    : d(new KUserPrivate(_uid.nativeId()))
 {
 }
 
@@ -237,7 +281,7 @@ static void listGroupsForUser(const char *name, gid_t gid, uint maxCount, Func h
         getgrouplist(name, gid, gid_buffer.data(), &numGroups);
     }
     for (int i = 0; i < numGroups && found < maxCount; ++i) {
-        struct group *g = getgrgid(gid_buffer[i]);
+        struct group *g = getgrgid(gid_buffer[i]); // ### not threadsafe
         // should never be null, but better be safe than crash
         if (g) {
             found++;
@@ -248,7 +292,7 @@ static void listGroupsForUser(const char *name, gid_t gid, uint maxCount, Func h
     // fall back to getgrent() and reading gr->gr_mem
     // This is slower than getgrouplist, but works as well
     // add the current gid, this is often not part of g->gr_mem (e.g. build.kde.org or my openSuSE 13.1 system)
-    struct group *g = getgrgid(gid);
+    struct group *g = getgrgid(gid); // ### not threadsafe
     if (g) {
         handleNextGroup(g);
         found++;
@@ -342,20 +386,38 @@ KUser::~KUser()
 class KUserGroupPrivate : public QSharedData
 {
 public:
-    gid_t gid;
+    gid_t gid = gid_t(-1);
     QString name;
 
     KUserGroupPrivate()
-        : gid(gid_t(-1))
     {
     }
     KUserGroupPrivate(const char *_name)
-        : gid(gid_t(-1))
     {
         fillGroup(_name ? ::getgrnam(_name) : nullptr);
     }
+    KUserGroupPrivate(K_GID gid)
+    {
+        struct group *gr = nullptr;
+#if defined(_POSIX_THREAD_SAFE_FUNCTIONS) && !defined(Q_OS_OPENBSD) && (!defined(Q_OS_ANDROID) || defined(Q_OS_ANDROID) && (__ANDROID_API__ >= 24))
+        static const int bufsize = os_gr_size();
+        QVarLengthArray<char, 1024> buf(bufsize);
+        struct group entry;
+        // Some large systems have more members than the POSIX max size
+        // Loop over by doubling the buffer size (upper limit 250k)
+        for (int size = bufsize; size < 256000; size += size) {
+            buf.resize(size);
+            // ERANGE indicates that the buffer was too small
+            if (!getgrgid_r(gid, &entry, buf.data(), buf.size(), &gr) || errno != ERANGE) {
+                break;
+            }
+        }
+#else
+        gr = getgrgid(gid); // not thread-safe!
+#endif
+        fillGroup(gr);
+    }
     KUserGroupPrivate(const ::group *p)
-        : gid(gid_t(-1))
     {
         fillGroup(p);
     }
@@ -370,17 +432,17 @@ public:
 };
 
 KUserGroup::KUserGroup(KUser::UIDMode mode)
+    : d(new KUserGroupPrivate(KUser(mode).groupId().nativeId()))
 {
-    d = new KUserGroupPrivate(getgrgid(KUser(mode).groupId().nativeId()));
 }
 
 KUserGroup::KUserGroup(K_GID _gid)
-    : d(new KUserGroupPrivate(getgrgid(_gid)))
+    : d(new KUserGroupPrivate(_gid))
 {
 }
 
 KUserGroup::KUserGroup(KGroupId _gid)
-    : d(new KUserGroupPrivate(getgrgid(_gid.nativeId())))
+    : d(new KUserGroupPrivate(_gid.nativeId()))
 {
 }
 
@@ -435,7 +497,7 @@ static void listGroupMembers(gid_t gid, uint maxCount, std::function<void(passwd
     if (maxCount == 0) {
         return;
     }
-    struct group *g = getgrgid(gid);
+    struct group *g = getgrgid(gid); // ### not threadsafe
     if (!g) {
         return;
     }
@@ -443,7 +505,7 @@ static void listGroupMembers(gid_t gid, uint maxCount, std::function<void(passwd
     QVarLengthArray<uid_t> addedUsers;
     struct passwd *p = nullptr;
     for (char **user = g->gr_mem; *user; user++) {
-        if ((p = getpwnam(*user))) {
+        if ((p = getpwnam(*user))) { // ### not threadsafe
             addedUsers.append(p->pw_uid);
             handleNextGroupUser(p);
             found++;

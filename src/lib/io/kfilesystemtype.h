@@ -26,8 +26,15 @@ enum Type {
     Fat, ///< FAT or similar (msdos, FAT, VFAT)
     Ramfs, ///< RAMDISK mount
     Other, ///< Ext3, Ext4, ReiserFs, and so on. "Normal" local filesystems.
-    Ntfs, ///< @since 5.85 NTFS filesystem.
-    Exfat, ///< @since 5.86 ExFat filesystem.
+    Ntfs, ///< NTFS filesystem @since 5.85
+    Exfat, ///< ExFat filesystem @since 5.86
+    /**
+     * FUSE (Filesystem in USErspace), this is used for a variety of underlying
+     * filesystems.
+     *
+     * @since 5.100
+     */
+    Fuse,
 };
 
 /**

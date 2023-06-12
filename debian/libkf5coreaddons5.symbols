@@ -86,6 +86,14 @@ libKF5CoreAddons.so.5 libkf5coreaddons5 #MINVER#
  _ZN11KJobPrivateD0Ev@Base 4.97.0
  _ZN11KJobPrivateD1Ev@Base 4.97.0
  _ZN11KJobPrivateD2Ev@Base 4.97.0
+ _ZN11KMemoryInfo6updateEv@Base 5.96.0
+ _ZN11KMemoryInfoC1ERKS_@Base 5.96.0
+ _ZN11KMemoryInfoC1Ev@Base 5.96.0
+ _ZN11KMemoryInfoC2ERKS_@Base 5.96.0
+ _ZN11KMemoryInfoC2Ev@Base 5.96.0
+ _ZN11KMemoryInfoD1Ev@Base 5.96.0
+ _ZN11KMemoryInfoD2Ev@Base 5.96.0
+ _ZN11KMemoryInfoaSERKS_@Base 5.96.0
  _ZN11KTextToHTML13convertToHtmlERK7QStringRK6QFlagsINS_6OptionEEii@Base 5.4.0+git20141204.0007+15.04
  _ZN12KAboutPerson16staticMetaObjectE@Base 5.53.1
  _ZN12KAboutPerson8fromJSONERK11QJsonObject@Base 5.18.0
@@ -114,6 +122,7 @@ libKF5CoreAddons.so.5 libkf5coreaddons5 #MINVER#
  _ZN12KUrlMimeData11setMetaDataERK4QMapI7QStringS1_EP9QMimeData@Base 4.97.0
  _ZN12KUrlMimeData13mimeDataTypesEv@Base 4.97.0
  _ZN12KUrlMimeData16urlsFromMimeDataEPK9QMimeDataNS_13DecodeOptionsEP4QMapI7QStringS5_E@Base 4.97.0
+ _ZN12KUrlMimeData18exportUrlsToPortalEP9QMimeData@Base 5.96.0
  _ZN12KUrlMimeData7setUrlsERK5QListI4QUrlES4_P9QMimeData@Base 4.97.0
  _ZN13KAboutLicense16staticMetaObjectE@Base 5.53.1
  _ZN13KAboutLicense18setLicenseFromPathERK7QString@Base 4.97.0
@@ -241,6 +250,7 @@ libKF5CoreAddons.so.5 libkf5coreaddons5 #MINVER#
  _ZN14KPluginFactory23stringListToVariantListERK11QStringList@Base 4.99.0
  _ZN14KPluginFactory23variantListToStringListERK5QListI8QVariantE@Base 4.99.0
  _ZN14KPluginFactory29logFailedInstantiationMessageE15KPluginMetaData@Base 5.90.0
+ _ZN14KPluginFactory29logFailedInstantiationMessageEPKc15KPluginMetaData@Base 5.96.0
  _ZN14KPluginFactory6createEPKcP7QWidgetP7QObjectRK5QListI8QVariantERK7QString@Base 4.99.0
  _ZN14KPluginFactoryC1ER21KPluginFactoryPrivate@Base 4.99.0
  _ZN14KPluginFactoryC1Ev@Base 4.99.0
@@ -249,6 +259,17 @@ libKF5CoreAddons.so.5 libkf5coreaddons5 #MINVER#
  _ZN14KPluginFactoryD0Ev@Base 4.99.0
  _ZN14KPluginFactoryD1Ev@Base 4.99.0
  _ZN14KPluginFactoryD2Ev@Base 4.99.0
+ _ZN14KSignalHandler11qt_metacallEN11QMetaObject4CallEiPPv@Base 5.92.0
+ _ZN14KSignalHandler11qt_metacastEPKc@Base 5.92.0
+ _ZN14KSignalHandler11watchSignalEi@Base 5.92.0
+ _ZN14KSignalHandler14signalReceivedEi@Base 5.92.0
+ _ZN14KSignalHandler16staticMetaObjectE@Base 5.92.0
+ _ZN14KSignalHandler4selfEv@Base 5.92.0
+ _ZN14KSignalHandlerC1Ev@Base 5.92.0
+ _ZN14KSignalHandlerC2Ev@Base 5.92.0
+ _ZN14KSignalHandlerD0Ev@Base 5.92.0
+ _ZN14KSignalHandlerD1Ev@Base 5.92.0
+ _ZN14KSignalHandlerD2Ev@Base 5.92.0
  _ZN14KStringHandler13logicalLengthERK7QString@Base 5.41.0
  _ZN14KStringHandler14preProcessWrapERK7QString@Base 4.97.0
  _ZN14KStringHandler6isUtf8EPKc@Base 4.97.0
@@ -278,9 +299,12 @@ libKF5CoreAddons.so.5 libkf5coreaddons5 #MINVER#
  _ZN15KFileSystemType14fileSystemNameENS_4TypeE@Base 5.90.0
  _ZN15KFileSystemType14fileSystemTypeERK7QString@Base 4.97.0
  _ZN15KPluginMetaData11findPluginsERK7QStringSt8functionIFbRKS_EE@Base 5.90.0
+ _ZN15KPluginMetaData11findPluginsERK7QStringSt8functionIFbRKS_EENS_21KPluginMetaDataOptionE@Base 5.92.0
+ _ZN15KPluginMetaData12fromJsonFileERK7QString@Base 5.92.0
  _ZN15KPluginMetaData14findPluginByIdERK7QStringS2_@Base 5.84.0
  _ZN15KPluginMetaData14readStringListERK11QJsonObjectRK7QString@Base 5.2.0
  _ZN15KPluginMetaData15fromDesktopFileERK7QStringRK11QStringList@Base 5.16.0
+ _ZN15KPluginMetaData16loadFromJsonFileERK7QString@Base 5.92.0
  _ZN15KPluginMetaData16staticMetaObjectE@Base 5.74.0
  _ZN15KPluginMetaData19loadFromDesktopFileERK7QStringRK11QStringList@Base 5.16.0
  _ZN15KPluginMetaData19readTranslatedValueERK11QJsonObjectRK7QStringRK10QJsonValue@Base 5.2.0
@@ -291,6 +315,7 @@ libKF5CoreAddons.so.5 libkf5coreaddons5 #MINVER#
  _ZN15KPluginMetaDataC1ERK13KPluginLoader@Base 5.2.0
  _ZN15KPluginMetaDataC1ERK13QPluginLoader@Base 5.2.0
  _ZN15KPluginMetaDataC1ERK7QString@Base 5.2.0
+ _ZN15KPluginMetaDataC1ERK7QStringNS_21KPluginMetaDataOptionE@Base 5.92.0
  _ZN15KPluginMetaDataC1ERKS_@Base 5.2.0
  _ZN15KPluginMetaDataC1Ev@Base 5.2.0
  _ZN15KPluginMetaDataC2E13QStaticPluginRK11QJsonObject@Base 5.90.0
@@ -299,6 +324,7 @@ libKF5CoreAddons.so.5 libkf5coreaddons5 #MINVER#
  _ZN15KPluginMetaDataC2ERK13KPluginLoader@Base 5.2.0
  _ZN15KPluginMetaDataC2ERK13QPluginLoader@Base 5.2.0
  _ZN15KPluginMetaDataC2ERK7QString@Base 5.2.0
+ _ZN15KPluginMetaDataC2ERK7QStringNS_21KPluginMetaDataOptionE@Base 5.92.0
  _ZN15KPluginMetaDataC2ERKS_@Base 5.2.0
  _ZN15KPluginMetaDataC2Ev@Base 5.2.0
  _ZN15KPluginMetaDataD1Ev@Base 5.2.0
@@ -321,6 +347,7 @@ libKF5CoreAddons.so.5 libkf5coreaddons5 #MINVER#
  _ZN15KRandomSequenceD1Ev@Base 4.97.0
  _ZN15KRandomSequenceD2Ev@Base 4.97.0
  _ZN15KRandomSequenceaSERKS_@Base 4.97.0
+ _ZN16KRuntimePlatform15runtimePlatformEv@Base 5.97.0
  _ZN16KSharedDataCache11deleteCacheERK7QString@Base 4.97.0
  _ZN16KSharedDataCache12setTimestampEj@Base 4.97.0
  _ZN16KSharedDataCache17setEvictionPolicyENS_14EvictionPolicyE@Base 4.97.0
@@ -411,6 +438,7 @@ libKF5CoreAddons.so.5 libkf5coreaddons5 #MINVER#
  _ZN4KJob18setProcessedAmountENS_4UnitEy@Base 4.97.0
  _ZN4KJob18totalAmountChangedEPS_NS_4UnitEyNS_14QPrivateSignalE@Base 5.80.0
  _ZN4KJob22processedAmountChangedEPS_NS_4UnitEyNS_14QPrivateSignalE@Base 5.80.0
+ _ZN4KJob29setFinishedNotificationHiddenEb@Base 5.92.0
  _ZN4KJob4execEv@Base 4.97.0
  _ZN4KJob4killENS_13KillVerbosityE@Base 4.97.0
  _ZN4KJob5speedEPS_m@Base 4.97.0
@@ -480,6 +508,8 @@ libKF5CoreAddons.so.5 libkf5coreaddons5 #MINVER#
  _ZN8KGroupId14currentGroupIdEv@Base 4.98.0
  _ZN8KGroupId23currentEffectiveGroupIdEv@Base 4.98.0
  _ZN8KGroupId8fromNameERK7QString@Base 4.98.0
+ _ZN8KLibexec14pathCandidatesERK7QString@Base 5.92.0
+ _ZN8KLibexec15pathFromAddressERK7QStringPv@Base 5.92.0
  _ZN8KMessage17setMessageHandlerEP15KMessageHandler@Base 4.97.0
  _ZN8KMessage7messageENS_11MessageTypeERK7QStringS3_@Base 4.97.0
  _ZN8KProcess10setProgramERK11QStringList@Base 4.97.0
@@ -510,6 +540,11 @@ libKF5CoreAddons.so.5 libkf5coreaddons5 #MINVER#
  _ZN8KProcessD2Ev@Base 4.97.0
  _ZN8KProcesslsERK11QStringList@Base 4.97.0
  _ZN8KProcesslsERK7QString@Base 4.97.0
+ _ZN8KSandbox15makeHostContextERK8QProcess@Base 5.97.0
+ _ZN8KSandbox16startHostProcessER8QProcess6QFlagsIN9QIODevice12OpenModeFlagEE@Base 5.97.0
+ _ZN8KSandbox6isSnapEv@Base 5.96.0
+ _ZN8KSandbox8isInsideEv@Base 5.96.0
+ _ZN8KSandbox9isFlatpakEv@Base 5.96.0
  _ZN9KDirWatch10removeFileERK7QString@Base 4.97.0
  _ZN9KDirWatch10setCreatedERK7QString@Base 4.97.0
  _ZN9KDirWatch10setDeletedERK7QString@Base 4.97.0
@@ -594,6 +629,16 @@ libKF5CoreAddons.so.5 libkf5coreaddons5 #MINVER#
  _ZNK10KUserGroup7isValidEv@Base 4.97.0
  _ZNK10KUserGroup9userNamesEj@Base 4.98.0
  _ZNK10KUserGroupeqERKS_@Base 4.97.0
+ _ZNK11KMemoryInfo12freePhysicalEv@Base 5.96.0
+ _ZNK11KMemoryInfo12freeSwapFileEv@Base 5.96.0
+ _ZNK11KMemoryInfo13totalPhysicalEv@Base 5.96.0
+ _ZNK11KMemoryInfo13totalSwapFileEv@Base 5.96.0
+ _ZNK11KMemoryInfo17availablePhysicalEv@Base 5.96.0
+ _ZNK11KMemoryInfo6cachedEv@Base 5.96.0
+ _ZNK11KMemoryInfo6isNullEv@Base 5.96.0
+ _ZNK11KMemoryInfo7buffersEv@Base 5.96.0
+ _ZNK11KMemoryInfoeqERKS_@Base 5.96.0
+ _ZNK11KMemoryInfoneERKS_@Base 5.96.0
  _ZNK12KAboutPerson10webAddressEv@Base 4.97.0
  _ZNK12KAboutPerson11ocsUsernameEv@Base 4.97.0
  _ZNK12KAboutPerson12emailAddressEv@Base 4.97.0
@@ -630,6 +675,7 @@ libKF5CoreAddons.so.5 libkf5coreaddons5 #MINVER#
  _ZNK14KNetworkMounts9isEnabledEv@Base 5.90.0
  _ZNK14KPluginFactory10metaObjectEv@Base 4.99.0
  _ZNK14KPluginFactory8metaDataEv@Base 5.77.0
+ _ZNK14KSignalHandler10metaObjectEv@Base 5.92.0
  _ZNK15KAboutComponent10webAddressEv@Base 5.84.0
  _ZNK15KAboutComponent11descriptionEv@Base 5.84.0
  _ZNK15KAboutComponent4nameEv@Base 5.84.0
@@ -641,6 +687,7 @@ libKF5CoreAddons.so.5 libkf5coreaddons5 #MINVER#
  _ZNK15KPluginMetaData11instantiateEv@Base 5.2.0
  _ZNK15KPluginMetaData11licenseTextEv@Base 5.74.0
  _ZNK15KPluginMetaData11translatorsEv@Base 5.18.0
+ _ZNK15KPluginMetaData12bugReportUrlEv@Base 5.99.0
  _ZNK15KPluginMetaData12dependenciesEv@Base 5.2.0
  _ZNK15KPluginMetaData12serviceTypesEv@Base 5.2.0
  _ZNK15KPluginMetaData12staticPluginEv@Base 5.90.0
@@ -652,6 +699,7 @@ libKF5CoreAddons.so.5 libkf5coreaddons5 #MINVER#
  _ZNK15KPluginMetaData16supportsMimeTypeERK7QString@Base 5.69.0
  _ZNK15KPluginMetaData17initialPreferenceEv@Base 5.69.0
  _ZNK15KPluginMetaData17otherContributorsEv@Base 5.18.0
+ _ZNK15KPluginMetaData17requestedFileNameEv@Base 5.92.0
  _ZNK15KPluginMetaData18isEnabledByDefaultEv@Base 5.2.0
  _ZNK15KPluginMetaData18translatorsVariantEv@Base 5.74.0
  _ZNK15KPluginMetaData24otherContributorsVariantEv@Base 5.74.0
@@ -696,6 +744,8 @@ libKF5CoreAddons.so.5 libkf5coreaddons5 #MINVER#
  _ZNK4KJob12capabilitiesEv@Base 4.97.0
  _ZNK4KJob12isAutoDeleteEv@Base 4.97.0
  _ZNK4KJob15processedAmountENS_4UnitE@Base 4.97.0
+ _ZNK4KJob17isStartedWithExecEv@Base 5.96.0
+ _ZNK4KJob28isFinishedNotificationHiddenEv@Base 5.92.0
  _ZNK4KJob5errorEv@Base 4.97.0
  _ZNK4KJob7percentEv@Base 4.97.0
  _ZNK4KJob9errorTextEv@Base 4.97.0
@@ -736,6 +786,7 @@ libKF5CoreAddons.so.5 libkf5coreaddons5 #MINVER#
  _ZTI14KJobUiDelegate@Base 4.97.0
  _ZTI14KNetworkMounts@Base 5.90.0
  _ZTI14KPluginFactory@Base 4.99.0
+ _ZTI14KSignalHandler@Base 5.92.0
  _ZTI15KRandomSequence@Base 4.97.0
  _ZTI17KListOpenFilesJob@Base 5.69.0
  _ZTI18KCharMacroExpander@Base 4.97.0
@@ -755,6 +806,7 @@ libKF5CoreAddons.so.5 libkf5coreaddons5 #MINVER#
  _ZTS14KJobUiDelegate@Base 4.97.0
  _ZTS14KNetworkMounts@Base 5.90.0
  _ZTS14KPluginFactory@Base 4.99.0
+ _ZTS14KSignalHandler@Base 5.92.0
  _ZTS15KRandomSequence@Base 4.97.0
  _ZTS17KListOpenFilesJob@Base 5.69.0
  _ZTS18KCharMacroExpander@Base 4.97.0
@@ -773,6 +825,7 @@ libKF5CoreAddons.so.5 libkf5coreaddons5 #MINVER#
  _ZTV14KJobUiDelegate@Base 4.97.0
  _ZTV14KNetworkMounts@Base 5.90.0
  _ZTV14KPluginFactory@Base 4.99.0
+ _ZTV14KSignalHandler@Base 5.92.0
  _ZTV15KRandomSequence@Base 4.97.0
  _ZTV17KListOpenFilesJob@Base 5.69.0
  _ZTV18KCharMacroExpander@Base 4.97.0

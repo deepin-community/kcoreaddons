@@ -17,8 +17,8 @@
 #include <math.h>
 
 KFormatPrivate::KFormatPrivate(const QLocale &locale)
+    : m_locale(locale)
 {
-    m_locale = locale;
 }
 
 KFormatPrivate::~KFormatPrivate()
@@ -50,8 +50,8 @@ QString KFormatPrivate::formatValue(double value,
         multiplier = 1000.0;
     }
 
-    int power = 0;
     if (prefix == KFormat::UnitPrefix::AutoAdjust) {
+        int power = 0;
         double adjustValue = qAbs(value);
         while (adjustValue >= multiplier) {
             adjustValue /= multiplier;
@@ -501,22 +501,34 @@ QString KFormatPrivate::formatRelativeDate(const QDate &date, QLocale::FormatTyp
 QString KFormatPrivate::formatRelativeDateTime(const QDateTime &dateTime, QLocale::FormatType format) const
 {
     const QDateTime now = QDateTime::currentDateTime();
-    const qint64 daysTo = dateTime.daysTo(now);
-    if (daysTo > 2 || daysTo < -2) {
-        return m_locale.toString(dateTime, format);
-    }
 
     const auto secsToNow = dateTime.secsTo(now);
-    if (secsToNow >= 0 && secsToNow < 60 * 60) {
+    constexpr int secsInAHour = 60 * 60;
+    if (secsToNow >= 0 && secsToNow < secsInAHour) {
         const int minutesToNow = secsToNow / 60;
         if (minutesToNow <= 1) {
             return tr("Just now");
         } else {
-            return tr("%1 minutes ago").arg(minutesToNow);
+            //: @item:intext %1 is a whole number
+            //~ singular %n minute ago
+            //~ plural %n minutes ago
+            return tr("%n minute(s) ago", nullptr, minutesToNow);
         }
     }
 
-    /*: relative datetime with %1 result of formatReleativeDate() and %2 the formatted time
+    const auto timeFormatType = format == QLocale::FormatType::LongFormat ? QLocale::FormatType::ShortFormat : format;
+    const qint64 daysToNow = dateTime.daysTo(now);
+    QString dateString;
+    if (daysToNow < 2 && daysToNow > -2) {
+        dateString = formatRelativeDate(dateTime.date(), format);
+    } else {
+        dateString = m_locale.toString(dateTime.date(), format);
+    }
+
+    /*: relative datetime with %1 result of QLocale.toString(date, format) or formatRelativeDate
+        and %2 result of QLocale.toString(time, timeformatType)
         If this does not fit the grammar of your language please contact the i18n team to solve the problem */
-    return tr("%1, %2").arg(formatRelativeDate(dateTime.date(), format), m_locale.toString(dateTime.time(), format));
+    QString formattedDate = tr("%1 at %2").arg(dateString, m_locale.toString(dateTime.time(), timeFormatType));
+
+    return formattedDate.replace(0, 1, formattedDate.at(0).toUpper());
 }

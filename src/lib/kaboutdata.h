@@ -189,23 +189,23 @@ class KCOREADDONS_EXPORT KAboutLicense
 
 public:
     /**
-     * Describes the license of the software.
+     * Describes the license of the software; for more information see: https://spdx.org/licenses/
      */
     enum LicenseKey {
-        Custom = -2,
-        File = -1,
-        Unknown = 0,
-        GPL = 1,
-        GPL_V2 = 1,
-        LGPL = 2,
-        LGPL_V2 = 2,
-        BSDL = 3,
-        Artistic = 4,
-        QPL = 5,
-        QPL_V1_0 = 5,
-        GPL_V3 = 6,
-        LGPL_V3 = 7,
-        LGPL_V2_1 = 8, ///< @since 5.25
+        Custom = -2, ///< Custom license
+        File = -1, ///< License set from text file, see setLicenseFromPath()
+        Unknown = 0, ///< Unknown license
+        GPL = 1, ///< GPL
+        GPL_V2 = GPL, ///< GPL_V2, this has the same value as LicenseKey::GPL, see https://spdx.org/licenses/GPL-2.0.html
+        LGPL = 2, ///< LGPL
+        LGPL_V2 = LGPL, ///< LGPL_V2, this has the same value as LicenseKey::LGPL, see https://spdx.org/licenses/LGPL-2.0-only.html
+        BSDL = 3, ///< BSDL, see https://spdx.org/licenses/BSD-2-Clause.html
+        Artistic = 4, ///< Artistic, see https://spdx.org/licenses/Artistic-2.0.html
+        QPL = 5, ///< QPL
+        QPL_V1_0 = QPL, ///< QPL_V1_0, this has the same value as LicenseKey::QPL, see https://spdx.org/licenses/QPL-1.0.html
+        GPL_V3 = 6, ///< GPL_V3, see https://spdx.org/licenses/GPL-3.0.html
+        LGPL_V3 = 7, ///< LGPL_V3, see https://spdx.org/licenses/LGPL-3.0-only.html
+        LGPL_V2_1 = 8, ///< LGPL_V2_1 @since 5.25, see https://spdx.org/licenses/LGPL-2.1-only.html
     };
     Q_ENUM(LicenseKey)
 
@@ -394,10 +394,10 @@ public:
      * @p name default argument
      */
     explicit KAboutComponent(const QString &name = QString(),
-                          const QString &description = QString(),
-                          const QString &version = QString(),
-                          const QString &webAddress = QString(),
-                          enum KAboutLicense::LicenseKey licenseType = KAboutLicense::Unknown);
+                             const QString &description = QString(),
+                             const QString &version = QString(),
+                             const QString &webAddress = QString(),
+                             enum KAboutLicense::LicenseKey licenseType = KAboutLicense::Unknown);
 
     /**
      * Convenience constructor
@@ -416,10 +416,10 @@ public:
      * @p name default argument
      */
     explicit KAboutComponent(const QString &name,
-                          const QString &description,
-                          const QString &version,
-                          const QString &webAddress,
-                          const QString &pathToLicenseFile);
+                             const QString &description,
+                             const QString &version,
+                             const QString &webAddress,
+                             const QString &pathToLicenseFile);
 
     /**
      * Copy constructor. Performs a deep copy.
@@ -820,10 +820,10 @@ public:
      * @since 5.84
      */
     KAboutData &addComponent(const QString &name,
-                           const QString &description = QString(),
-                           const QString &version = QString(),
-                           const QString &webAddress = QString(),
-                           KAboutLicense::LicenseKey licenseKey = KAboutLicense::Unknown);
+                             const QString &description = QString(),
+                             const QString &version = QString(),
+                             const QString &webAddress = QString(),
+                             KAboutLicense::LicenseKey licenseKey = KAboutLicense::Unknown);
 
     /**
      * Defines a component that is used by the application with a custom license text file.
@@ -848,11 +848,8 @@ public:
      *
      * @since 5.84
      */
-    KAboutData &addComponent(const QString &name,
-                           const QString &description,
-                           const QString &version,
-                           const QString &webAddress,
-                           const QString &pathToLicenseFile);
+    KAboutData &
+    addComponent(const QString &name, const QString &description, const QString &version, const QString &webAddress, const QString &pathToLicenseFile);
 
     /**
      * Defines a license text, which is translated.

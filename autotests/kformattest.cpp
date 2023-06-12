@@ -15,13 +15,14 @@
 
 #include "kformat.h"
 
-#ifndef Q_OS_WIN
-void ignoreTranslations()
+void setupEnvironment()
 {
+#ifndef Q_OS_WIN
+    // ignore translations
     qputenv("XDG_DATA_DIRS", "does-not-exist");
-}
-Q_CONSTRUCTOR_FUNCTION(ignoreTranslations)
 #endif
+}
+Q_CONSTRUCTOR_FUNCTION(setupEnvironment)
 
 void KFormatTest::formatByteSize()
 {
@@ -359,13 +360,13 @@ void KFormatTest::formatRelativeDate()
 
     // An hour ago is **usually** today, except after midnight; just bump
     // to after 2am to make the "today" test work.
-    if (now.time().hour() == 0)
-    {
+    if (now.time().hour() == 0) {
         now = now.addSecs(7201);
     }
 
     QDateTime testDateTime = now.addSecs(-3600);
-    QCOMPARE(format.formatRelativeDateTime(testDateTime, QLocale::ShortFormat), QStringLiteral("Today, %1").arg(testDateTime.toString(QStringLiteral("hh:mm:ss"))));
+    QCOMPARE(format.formatRelativeDateTime(testDateTime, QLocale::ShortFormat),
+             QStringLiteral("Today at %1").arg(testDateTime.toString(QStringLiteral("hh:mm:ss"))));
 
     // 1 second ago
     now = QDateTime::currentDateTime();
@@ -374,10 +375,26 @@ void KFormatTest::formatRelativeDate()
 
     // 5 minutes ago
     testDateTime = now.addSecs(-300);
-    QCOMPARE(format.formatRelativeDateTime(testDateTime, QLocale::ShortFormat), QStringLiteral("5 minutes ago"));
+    QCOMPARE(format.formatRelativeDateTime(testDateTime, QLocale::ShortFormat), QStringLiteral("5 minute(s) ago"));
 
     testDateTime = QDateTime(QDate::currentDate().addDays(8), QTime(3, 0, 0));
-    QCOMPARE(format.formatRelativeDateTime(testDateTime, QLocale::LongFormat), QLocale::c().toString(testDateTime, QLocale::LongFormat));
+    QCOMPARE(format.formatRelativeDateTime(testDateTime, QLocale::LongFormat),
+             QStringLiteral("%1 at %2")
+                 .arg(QLocale::c().toString(testDateTime.date(), QLocale::LongFormat), QLocale::c().toString(testDateTime.time(), QLocale::ShortFormat)));
+
+    // 2021-10-03 07:33:57.000
+    testDateTime = QDateTime::fromMSecsSinceEpoch(1633239237000, Qt::UTC);
+    QCOMPARE(format.formatRelativeDateTime(testDateTime, QLocale::LongFormat),
+             QStringLiteral("%1 at %2")
+                 .arg(QLocale::c().toString(testDateTime.date(), QLocale::LongFormat), QLocale::c().toString(testDateTime.time(), QLocale::ShortFormat)));
+    QCOMPARE(format.formatRelativeDateTime(testDateTime, QLocale::ShortFormat),
+             QStringLiteral("%1 at %2")
+                 .arg(QLocale::c().toString(testDateTime.date(), QLocale::ShortFormat), QLocale::c().toString(testDateTime.time(), QLocale::ShortFormat)));
+
+    // With a different local for double check
+    QLocale englishLocal = QLocale::English;
+    KFormat formatEnglish(englishLocal);
+    QCOMPARE(formatEnglish.formatRelativeDateTime(testDateTime, QLocale::LongFormat), QStringLiteral("Sunday, October 3, 2021 at 5:33 AM"));
 }
 
 QTEST_MAIN(KFormatTest)

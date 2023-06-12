@@ -11,6 +11,11 @@
 #include <kpluginfactory.h>
 #include <kpluginloader.h>
 
+// We do not have QWidgets as a dependency, this is a simple placeholder for the type to be fully qualified
+class QWidget : public QObject
+{
+};
+
 class KPluginFactoryTest : public QObject
 {
     Q_OBJECT
@@ -35,6 +40,12 @@ private Q_SLOTS:
         delete obj;
         delete obj2;
 
+        // Try creating a part without keyword/args
+        QWidget parentWidget;
+        QObject *partTest = factory->create<QObject>(&parentWidget, this);
+        QVERIFY(partTest);
+        delete partTest;
+
 #if KCOREADDONS_BUILD_DEPRECATED_SINCE(5, 89)
         obj = factory->create<QObject>(QStringLiteral("secondary"), this, args);
         QVERIFY(obj);
@@ -51,16 +62,17 @@ private Q_SLOTS:
 
     void testPluginWithoutMetaData()
     {
-        KPluginFactory::Result<KPluginFactory> factoryResult = KPluginFactory::loadFactory(KPluginMetaData(QStringLiteral("pluginwithoutmetadata")));
+        KPluginFactory::Result<KPluginFactory> factoryResult = KPluginFactory::loadFactory(KPluginMetaData(QStringLiteral("namespace/pluginwithoutmetadata")));
         QVERIFY(factoryResult);
         auto plugin = factoryResult.plugin->create<QObject>();
         QVERIFY(plugin);
         QCOMPARE(plugin->metaObject()->className(), "PluginWithoutMetaData");
+        delete plugin;
     }
 
     void testResultingCMakeMacroPlugin()
     {
-        KPluginMetaData data(QStringLiteral("plugins/namespace/jsonplugin_cmake_macro"));
+        KPluginMetaData data(QStringLiteral("namespace/jsonplugin_cmake_macro"));
         QVERIFY(data.isValid());
 
         auto instance = QPluginLoader(data.fileName()).instance();
@@ -74,6 +86,7 @@ private Q_SLOTS:
         QCOMPARE(result.plugin->metaObject()->className(), "JsonPlugin");
         QVERIFY(result.errorString.isEmpty());
         QCOMPARE(result.errorReason, KPluginFactory::NO_PLUGIN_ERROR);
+        delete result.plugin;
     }
 
     void testCreateUsingUtilityMethodsErrorHandling()
@@ -96,6 +109,7 @@ private Q_SLOTS:
             auto result = KPluginFactory::instantiatePlugin<KPluginFactoryTest>(KPluginMetaData(QStringLiteral("jsonplugin")), nullptr, QVariantList());
             QVERIFY(!result.plugin);
             QCOMPARE(result.errorReason, KPluginFactory::INVALID_KPLUGINFACTORY_INSTANTIATION);
+            QVERIFY(result.errorText.contains("KPluginFactoryTest"));
         }
     }
 
@@ -104,7 +118,19 @@ private Q_SLOTS:
         const auto plugins = KPluginMetaData::findPlugins(QStringLiteral("staticnamespace"));
         QCOMPARE(plugins.count(), 1);
 
-        QVERIFY(KPluginFactory::instantiatePlugin<QObject>(plugins.first()));
+        auto result = KPluginFactory::instantiatePlugin<QObject>(plugins.first());
+        QVERIFY(result);
+        delete result.plugin;
+    }
+
+    void testNonExistingPlugin()
+    {
+        KPluginMetaData data(QStringLiteral("does/not/exist"));
+        QVERIFY(!data.isValid());
+        const auto res = KPluginFactory::instantiatePlugin<QObject>(data);
+        QVERIFY(!res);
+        QCOMPARE(res.errorReason, KPluginFactory::INVALID_PLUGIN);
+        QCOMPARE(res.errorText, QStringLiteral("Could not find plugin does/not/exist"));
     }
 };
 

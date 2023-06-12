@@ -159,9 +159,9 @@ License: GPL-2+3+KDEeV
 Files: autotests/kpluginfactorytest.cpp
        autotests/kpluginloadertest.cpp
        autotests/kpluginmetadatatest.cpp
-       po/ca/*
-       po/ca@valencia/*
-       po/uk/*
+       poqm/ca/*
+       poqm/ca@valencia/*
+       poqm/uk/*
        src/desktoptojson/desktoptojson.cpp
        src/desktoptojson/desktoptojson.h
        src/desktoptojson/main.cpp

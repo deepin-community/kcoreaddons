@@ -6,6 +6,23 @@ configure_file(caching/config-caching.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config
 include(CheckSymbolExists)
 check_symbol_exists("getgrouplist" "grp.h" HAVE_GETGROUPLIST)
 
+if(UNIX)
+    function(check_dladdr) # use a function to scope the variables!
+        set(CMAKE_REQUIRED_FLAGS ${DLADDR_LINK_FLAGS})
+        set(CMAKE_REQUIRED_LIBRARIES ${DLADDR_LINK_LIBRARIES})
+        check_symbol_exists("dladdr" "dlfcn.h" HAVE_DLADDR)
+        set(HAVE_DLADDR ${HAVE_DLADDR} PARENT_SCOPE)
+    endfunction()
+
+    if(CMAKE_SYSTEM_NAME MATCHES "Linux") # on linux dladdr isn't part of libc, on freebsd and osx it is
+        set(DLADDR_LINK_FLAGS "-D_GNU_SOURCE")
+        set(DLADDR_LINK_LIBRARIES "dl")
+    endif()
+    check_dladdr()
+
+    add_feature_info(dladdr ${HAVE_DLADDR} "Can resolve shared library paths and by extension libexec paths at runtime using dladdr() API")
+endif()
+
 set (KDE4_DEFAULT_HOME ".kde${_KDE4_DEFAULT_HOME_POSTFIX}" CACHE STRING "The default KDE home directory" )
 set (ACCOUNTS_SERVICE_ICON_DIR "/var/lib/AccountsService/icons" CACHE STRING "Accounts Services icon storage directory")
 
@@ -33,6 +50,7 @@ endif ()
 if(NOT WIN32)
     target_sources(KF5CoreAddons PRIVATE
         caching/kshareddatacache.cpp
+        caching/kshareddatacache.h
     )
 
     set_source_files_properties(caching/kshareddatacache.cpp
@@ -66,12 +84,30 @@ if (UNIX)
         target_sources(KF5CoreAddons PRIVATE
             util/kprocesslist_unix_procstat.cpp
         )
+        target_compile_definitions(KF5CoreAddons PRIVATE HAVE_PROCSTAT=1)
     else ()
         target_sources(KF5CoreAddons PRIVATE
             util/kprocesslist_unix.cpp
         )
     endif ()
 endif ()
+
+if(HAVE_QTDBUS)
+    set(_dbus_SRCS)
+
+    set_source_files_properties(io/org.freedesktop.portal.FileTransfer.xml PROPERTIES INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/io/dbustypes_p.h)
+    qt_add_dbus_interface(_dbus_SRCS io/org.freedesktop.portal.FileTransfer.xml io/org.freedesktop.portal.FileTransfer)
+
+    set_source_files_properties(io/org.kde.KIOFuse.VFS.xml PROPERTIES NO_NAMESPACE TRUE)
+    qt_add_dbus_interface(_dbus_SRCS io/org.kde.KIOFuse.VFS.xml io/org.kde.KIOFuse.VFS)
+
+    target_sources(KF5CoreAddons PRIVATE ${_dbus_SRCS})
+    target_link_libraries(KF5CoreAddons PRIVATE Qt${QT_MAJOR_VERSION}::DBus)
+endif()
+
+if (TARGET UDev::UDev)
+    target_link_libraries(KF5CoreAddons PRIVATE UDev::UDev)
+endif()
 
 target_sources(KF5CoreAddons PRIVATE
     kaboutdata.cpp
@@ -108,6 +144,49 @@ target_sources(KF5CoreAddons PRIVATE
     util/kosrelease.cpp
     util/kprocesslist.cpp
     util/kshell.cpp
+    util/klibexec.cpp
+    util/ksignalhandler.cpp
+    util/ksandbox.cpp
+    util/kmemoryinfo.cpp
+    util/kruntimeplatform.cpp
+
+    kaboutdata.h
+    kcoreaddons.h
+    io/kautosavefile.h
+    io/kdirwatch.h
+    io/kfilesystemtype.h
+    io/kmessage.h
+    io/kprocess.h
+    io/kbackup.h
+    io/kurlmimedata.h
+    io/kfileutils.h
+    io/knetworkmounts.h
+    jobs/kcompositejob.h
+    jobs/kjob.h
+    jobs/kjobtrackerinterface.h
+    jobs/kjobuidelegate.h
+    plugin/kpluginfactory.h
+    plugin/kpluginloader.h
+    plugin/kpluginmetadata.h
+    plugin/kstaticpluginhelpers.h
+    randomness/krandom.h
+    randomness/krandomsequence.h
+    text/kjsonutils.h
+    text/kfuzzymatcher.h
+    text/kmacroexpander.h
+    text/kstringhandler.h
+    text/ktexttohtml.h
+    util/kdelibs4migration.h
+    util/kdelibs4configmigrator.h
+    util/kformat.h
+    util/kosrelease.h
+    util/kprocesslist.h
+    util/kshell.h
+    util/klibexec.h
+    util/ksignalhandler.h
+    util/ksandbox.h
+    util/kmemoryinfo.h
+    util/kruntimeplatform.h
 )
 
 
@@ -136,6 +215,12 @@ ecm_qt_export_logging_category(
     CATEGORY_NAME kf.coreaddons.kaboutdata
     OLD_CATEGORY_NAMES kf5.kcoreaddons.kaboutdata
     DESCRIPTION "KAboutData (KCoreAddons)"
+    EXPORT KCOREADDONS
+)
+ecm_qt_export_logging_category(
+    IDENTIFIER LOG_KMEMORYINFO
+    CATEGORY_NAME kf.coreaddons.kmemoryinfo
+    DESCRIPTION "KMemoryInfo (KCoreAddons)"
     EXPORT KCOREADDONS
 )
 ecm_qt_declare_logging_category(KF5CoreAddons
@@ -170,7 +255,7 @@ ecm_generate_export_header(KF5CoreAddons
     GROUP_BASE_NAME KF
     VERSION ${KF_VERSION}
     DEPRECATED_BASE_VERSION 0
-    DEPRECATION_VERSIONS 4.0 5.0 5.2 5.65 5.67 5.70 5.72 5.75 5.76 5.78 5.79 5.80 5.84 5.86 5.87 5.88 5.89
+    DEPRECATION_VERSIONS 4.0 5.0 5.2 5.65 5.67 5.70 5.72 5.75 5.76 5.78 5.79 5.80 5.84 5.86 5.87 5.88 5.89 5.92 5.95 5.97
     EXCLUDE_DEPRECATED_BEFORE_AND_AT ${EXCLUDE_DEPRECATED_BEFORE_AND_AT}
 )
 
@@ -182,11 +267,20 @@ target_link_libraries(KF5CoreAddons
 )
 
 if(WIN32)
-    target_link_libraries(KF5CoreAddons PRIVATE netapi32 userenv)
+    target_link_libraries(KF5CoreAddons PRIVATE netapi32 userenv psapi)
+endif()
+
+if(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
+    target_link_libraries(KF5CoreAddons PRIVATE kvm)
 endif()
 
 if (HAVE_PROCSTAT)
     target_link_libraries(KF5CoreAddons PRIVATE Procstat::Procstat)
+endif()
+
+if(HAVE_DLADDR)
+    set_source_files_properties(SOURCE util/klibexec.cpp PROPERTIES COMPILE_FLAGS "${DLADDR_LINK_FLAGS}") # ensure _GNU_SOURCE on Linux
+    target_link_libraries(KF5CoreAddons PRIVATE ${DLADDR_LINK_LIBRARIES})
 endif()
 
 target_include_directories(KF5CoreAddons INTERFACE "$<INSTALL_INTERFACE:${KDE_INSTALL_INCLUDEDIR_KF}/KCoreAddons>" )
@@ -270,57 +364,16 @@ ecm_generate_headers(KCoreAddons_HEADERS
         KListOpenFilesJob
         Kdelibs4Migration
         Kdelibs4ConfigMigrator
+        KLibexec
+        KSignalHandler
+        KRuntimePlatform
+        KSandbox
+        KMemoryInfo
     RELATIVE util
     REQUIRED_HEADERS KCoreAddons_HEADERS
 )
 
-find_package(PythonModuleGeneration)
-
-if (PythonModuleGeneration_FOUND)
-  ecm_generate_python_binding(
-    TARGET KF5::CoreAddons
-    PYTHONNAMESPACE PyKF5
-    MODULENAME KCoreAddons
-    RULES_FILE "${CMAKE_SOURCE_DIR}/cmake/rules_PyKF5.py"
-    SIP_DEPENDS
-      QtCore/QtCoremod.sip
-    HEADERS
-      kaboutdata.h
-      kcoreaddons.h
-      caching/kshareddatacache.h
-      io/kautosavefile.h
-      io/kdirwatch.h
-      io/kmessage.h
-      io/kprocess.h
-      io/kbackup.h
-      io/kurlmimedata.h
-      io/kfilesystemtype.h
-      jobs/kcompositejob.h
-      jobs/kjob.h
-      jobs/kjobtrackerinterface.h
-      jobs/kjobuidelegate.h
-      plugin/kexportplugin.h
-      plugin/kpluginfactory.h
-      plugin/kpluginloader.h
-      plugin/kpluginmetadata.h
-      randomness/krandom.h
-      randomness/krandomsequence.h
-      text/kmacroexpander.h
-      text/kstringhandler.h
-      text/ktexttohtml.h
-      text/ktexttohtmlemoticonsinterface.h
-      util/kformat.h
-      util/klistopenfilesjob.h
-      util/kosrelease.h
-      util/kprocesslist.h
-      util/kuser.h
-      util/kshell.h
-      util/kdelibs4migration.h
-      util/kdelibs4configmigrator.h
-  )
-endif()
-
-install(TARGETS KF5CoreAddons EXPORT KF5CoreAddonsTargets ${KF5_INSTALL_TARGETS_DEFAULT_ARGS})
+install(TARGETS KF5CoreAddons EXPORT KF5CoreAddonsTargets ${KF_INSTALL_TARGETS_DEFAULT_ARGS})
 
 install(FILES
     ${KCoreAddons_HEADERS}

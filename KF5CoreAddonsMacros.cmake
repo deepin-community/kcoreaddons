@@ -1,7 +1,7 @@
 #
 # kcoreaddons_desktop_to_json(target desktopfile
 #                             DEFAULT_SERVICE_TYPE | SERVICE_TYPES <file> [<file> [...]]
-#                             [OUTPUT_DIR dir] [COMPAT_MODE])
+#                             [OUTPUT_DIR dir | OUTPUT_FILE file] [COMPAT_MODE])
 #
 # This macro uses desktoptojson to generate a json file from a plugin
 # description in a .desktop file. The generated file can be compiled
@@ -22,6 +22,9 @@
 # If OUTPUT_DIR is set the generated file will be created inside <dir> instead of in
 # ${CMAKE_CURRENT_BINARY_DIR}
 #
+# If OUTPUT_FILE is set the generated file will be <file> instead of the default
+# ${CMAKE_CURRENT_BINARY_DIR}/$(basename desktopfile).json
+#
 # Example:
 #
 #  kcoreaddons_desktop_to_json(plasma_engine_time plasma-dataengine-time.desktop
@@ -29,9 +32,11 @@
 
 function(kcoreaddons_desktop_to_json target desktop)
     get_filename_component(desktop_basename ${desktop} NAME_WE) # allow passing an absolute path to the .desktop
-    cmake_parse_arguments(DESKTOP_TO_JSON "COMPAT_MODE;DEFAULT_SERVICE_TYPE" "OUTPUT_DIR" "SERVICE_TYPES" ${ARGN})
+    cmake_parse_arguments(DESKTOP_TO_JSON "COMPAT_MODE;DEFAULT_SERVICE_TYPE" "OUTPUT_DIR;OUTPUT_FILE" "SERVICE_TYPES" ${ARGN})
 
-    if(DESKTOP_TO_JSON_OUTPUT_DIR)
+    if(DESKTOP_TO_JSON_OUTPUT_FILE)
+        set(json "${DESKTOP_TO_JSON_OUTPUT_FILE}")
+    elseif(DESKTOP_TO_JSON_OUTPUT_DIR)
         set(json "${DESKTOP_TO_JSON_OUTPUT_DIR}/${desktop_basename}.json")
     else()
         set(json "${CMAKE_CURRENT_BINARY_DIR}/${desktop_basename}.json")
@@ -45,14 +50,28 @@ function(kcoreaddons_desktop_to_json target desktop)
         _desktop_to_json_cmake28(${desktop} ${json} ${DESKTOP_TO_JSON_COMPAT_MODE})
         return()
     endif()
-    set(command KF5::desktoptojson -i ${desktop} -o ${json})
+    kcoreaddons_desktop_to_json_crosscompilation_args(_crosscompile_args)
+    set(command KF5::desktoptojson ${_crosscompile_args} -i ${desktop} -o ${json})
     if(DESKTOP_TO_JSON_COMPAT_MODE)
       list(APPEND command -c)
     endif()
     if(DESKTOP_TO_JSON_SERVICE_TYPES)
       foreach(type ${DESKTOP_TO_JSON_SERVICE_TYPES})
-        if (EXISTS ${KDE_INSTALL_FULL_KSERVICETYPES5DIR}/${type})
-            set(type ${KDE_INSTALL_FULL_KSERVICETYPES5DIR}/${type})
+        if(NOT IS_ABSOLUTE "${type}")
+          if(CMAKE_CROSSCOMPILING)
+            if (DEFINED KSERVICETYPE_PATH_${type})
+              set(_guess ${KSERVICETYPE_PATH_${type}})
+            else()
+              set(_guess ${CMAKE_SYSROOT}/${KDE_INSTALL_FULL_KSERVICETYPESDIR}/${type})
+            endif()
+            if(EXISTS ${_guess})
+              set(type ${CMAKE_SYSROOT}/${KDE_INSTALL_FULL_KSERVICETYPESDIR}/${type})
+            else()
+              message(WARNING "Could not find service type ${type}, tried ${_guess}. Set KSERVICETYPE_PATH_${type} to override this guess.")
+            endif()
+          elseif(EXISTS ${KDE_INSTALL_FULL_KSERVICETYPESDIR}/${type})
+            set(type ${KDE_INSTALL_FULL_KSERVICETYPESDIR}/${type})
+          endif()
         endif()
         list(APPEND command -s ${type})
       endforeach()
@@ -67,6 +86,17 @@ function(kcoreaddons_desktop_to_json target desktop)
         COMMENT "Generating ${relativejson}"
     )
     set_property(TARGET ${target} APPEND PROPERTY AUTOGEN_TARGET_DEPENDS ${json})
+endfunction()
+
+# Internal function to get the additional arguments that should be passed to desktoptojson when cross-compiling
+function(kcoreaddons_desktop_to_json_crosscompilation_args output_var)
+  set(_extra_args)
+  # When cross-compiling we can't use relative paths since that might find an incompatible file on the host
+  # using QStandardPaths (or not find any at all e.g. when cross-compiling from macOS).
+  if(CMAKE_CROSSCOMPILING)
+    set(_extra_args --strict-path-mode --generic-data-path "${CMAKE_SYSROOT}/${KDE_INSTALL_FULL_DATAROOTDIR}")
+  endif()
+  set(${output_var} ${_extra_args} PARENT_SCOPE)
 endfunction()
 
 function(_desktop_to_json_cmake28 desktop json compat)
@@ -129,6 +159,13 @@ function(kcoreaddons_add_plugin plugin)
     if (NOT KCA_ADD_PLUGIN_INSTALL_NAMESPACE)
         message(FATAL_ERROR "Must specify INSTALL_NAMESPACE for ${plugin}")
     endif()
+    if (KCA_ADD_PLUGIN_UNPARSED_ARGUMENTS)
+        if ("${ECM_GLOBAL_FIND_VERSION}" VERSION_GREATER_EQUAL "5.91.0")
+            message(FATAL_ERROR "kcoreaddons_add_plugin method call recieved unexpected arguments: ${KCA_ADD_PLUGIN_UNPARSED_ARGUMENTS}")
+        else()
+            message(WARNING "kcoreaddons_add_plugin method call recieved unexpected arguments: ${KCA_ADD_PLUGIN_UNPARSED_ARGUMENTS}")
+        endif()
+    endif()
 
     string(REPLACE "-" "_" SANITIZED_PLUGIN_NAME ${plugin})
     string(REPLACE "." "_" SANITIZED_PLUGIN_NAME ${SANITIZED_PLUGIN_NAME})
@@ -173,21 +210,28 @@ function(kcoreaddons_add_plugin plugin)
             LIBRARY_OUTPUT_DIRECTORY "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/${KCA_ADD_PLUGIN_INSTALL_NAMESPACE}")
     endif()
 
-    if(NOT ANDROID)
-        install(TARGETS ${plugin} DESTINATION ${KDE_INSTALL_PLUGINDIR}/${KCA_ADD_PLUGIN_INSTALL_NAMESPACE})
-    else()
-        string(REPLACE "/" "_" pluginprefix "${KCA_ADD_PLUGIN_INSTALL_NAMESPACE}")
-        set_property(TARGET ${plugin} PROPERTY PREFIX "libplugins_")
-        if(NOT pluginprefix STREQUAL "")
-            set_property(TARGET ${plugin} APPEND_STRING PROPERTY PREFIX "${pluginprefix}_")
+    if (NOT KCOREADDONS_INTERNAL_SKIP_PLUGIN_INSTALLATION)
+        if(NOT ANDROID)
+            install(TARGETS ${plugin} DESTINATION ${KDE_INSTALL_PLUGINDIR}/${KCA_ADD_PLUGIN_INSTALL_NAMESPACE})
+        else()
+            string(REPLACE "/" "_" pluginprefix "${KCA_ADD_PLUGIN_INSTALL_NAMESPACE}")
+            set_property(TARGET ${plugin} PROPERTY PREFIX "libplugins_")
+            if(NOT pluginprefix STREQUAL "")
+                set_property(TARGET ${plugin} APPEND_STRING PROPERTY PREFIX "${pluginprefix}_")
+            endif()
+            install(TARGETS ${plugin} DESTINATION ${KDE_INSTALL_PLUGINDIR})
         endif()
-        install(TARGETS ${plugin} DESTINATION ${KDE_INSTALL_PLUGINDIR})
     endif()
 endfunction()
 
 # This macro imports the plugins for the given namespace that were
 # registered using the kcoreaddons_add_plugin function.
 # This includes the K_IMPORT_PLUGIN statements and linking the plugins to the given target.
+#
+# In case the plugins are used in both the executable and multiple autotests it it recommended to
+# bundle the static plugins in a shared lib for the autotests. In case of shared libs the plugin registrations
+# will take effect when the test link against it.
+#
 # Since 5.89
 function(kcoreaddons_target_static_plugins app_target plugin_namespace)
     cmake_parse_arguments(ARGS "" "LINK_OPTION" "" ${ARGN})
@@ -205,8 +249,15 @@ function(kcoreaddons_target_static_plugins app_target plugin_namespace)
     file(WRITE ${TMP_PLUGIN_FILE} ${IMPORT_PLUGIN_STATEMENTS})
     execute_process(COMMAND ${CMAKE_COMMAND} -E copy_if_different ${TMP_PLUGIN_FILE} ${PLUGIN_FILE})
     file(REMOVE ${TMP_PLUGIN_FILE})
-     # in case of apps bundling their plugins in a small static lib the linking needs to be public
-    target_sources(${app_target} PUBLIC ${PLUGIN_FILE})
+    if(ECM_GLOBAL_FIND_VERSION VERSION_GREATER_EQUAL "5.91.0")
+        target_sources(${app_target} PRIVATE ${PLUGIN_FILE})
+    else()
+        # in case of apps bundling their plugins in a small static lib the linking needs to be public
+        # see API docs for a better solution in consumer's code.
+        # Because this will not change the behavior if the plugins are targeted directly to the executable, only
+        # an ECM version check is used and not an additional option.
+        target_sources(${app_target} PUBLIC ${PLUGIN_FILE})
+    endif()
 endfunction()
 
 # Clear previously set plugins, otherwise Q_IMPORT_PLUGIN statements

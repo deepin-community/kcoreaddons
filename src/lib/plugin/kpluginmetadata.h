@@ -52,6 +52,7 @@ class QStaticPlugin;
  * Id                 | pluginId()           | string
  * Version            | version()            | string
  * Website            | website()            | string
+ * BugReportUrl       | bugReportUrl()       | string
  * EnabledByDefault   | isEnabledByDefault() | bool
  * ServiceTypes       | serviceTypes()       | string array
  * MimeTypes          | mimeTypes()          | string array
@@ -107,6 +108,7 @@ class KCOREADDONS_EXPORT KPluginMetaData
     Q_PROPERTY(QString pluginId READ pluginId CONSTANT)
     Q_PROPERTY(QString version READ version CONSTANT)
     Q_PROPERTY(QString website READ website CONSTANT)
+    Q_PROPERTY(QString bugReportUrl READ bugReportUrl CONSTANT)
 #if KCOREADDONS_ENABLE_DEPRECATED_SINCE(5, 79)
     Q_PROPERTY(QStringList dependencies READ dependencies CONSTANT)
 #endif
@@ -119,6 +121,15 @@ class KCOREADDONS_EXPORT KPluginMetaData
     Q_PROPERTY(int initialPreference READ isEnabledByDefault CONSTANT)
 
 public:
+    /**
+     * Options for creating a KPluginMetaData object.
+     * @since 5.91
+     */
+    enum KPluginMetaDataOption {
+        DoNotAllowEmptyMetaData, /// Plugins with empty metaData are considered invalid
+        AllowEmptyMetaData, /// Plugins with empty metaData are considered valid
+    };
+
     /** Creates an invalid KPluginMetaData instance */
     KPluginMetaData();
 
@@ -149,10 +160,20 @@ public:
      *
      * If @p file ends with .json, the file will be loaded as the QJsonObject metadata.
      *
+     * @note Using this constructor for metadata files is deprecated..
+     * Use KPluginMetaData::fromDesktopFile or KPluginMetaData::fromJsonFile instead.
+     *
      * @see QPluginLoader::setFileName()
      * @see KPluginMetaData::fromDesktopFile()
+     * @see KPluginMetaData::fromJsonFile()
      */
     KPluginMetaData(const QString &file);
+
+    /**
+     * Overload which takes an option parameter that gets used when creating the KPluginMetaData instances
+     * @since 5.91
+     */
+    KPluginMetaData(const QString &file, KPluginMetaDataOption option);
 
     /**
      * Creates a KPluginMetaData from a QJsonObject holding the metadata and a file name
@@ -200,8 +221,9 @@ public:
      */
     ~KPluginMetaData();
 
+#if KCOREADDONS_ENABLE_DEPRECATED_SINCE(5, 92)
     /**
-     * Load a KPluginMetaData instace from a .desktop file. Unlike the constructor which takes
+     * Load a KPluginMetaData instance from a .desktop file. Unlike the constructor which takes
      * a single file parameter this method allows you to specify which service type files should
      * be parsed to determine the correct type for a given .desktop property.
      * This ensures that a e.g. comma-separated string list field in the .desktop file will correctly
@@ -217,8 +239,20 @@ public:
      * will be read as the JSON string type.
      *
      * @since 5.16
+     * @deprecated Since 5.92, use json files or embedded json metadata directly.
      */
+    KCOREADDONS_DEPRECATED_VERSION(5, 92, "Use json files or embedded json metadata directly")
     static KPluginMetaData fromDesktopFile(const QString &file, const QStringList &serviceTypes = QStringList());
+#endif
+
+    /**
+     * Load a KPluginMetaData instance from a .json file. Unlike the constructor with a single file argument,
+     * this ensure that only JSON format plugins are loaded and any other type is rejected.
+     *
+     * @param jsonFile the .json file to load
+     * @since 5.91
+     */
+    static KPluginMetaData fromJsonFile(const QString &jsonFile);
 
     /**
      * @param directory The directory to search for plugins. If a relative path is given for @p directory,
@@ -245,6 +279,11 @@ public:
      * @since 5.86
      */
     static QVector<KPluginMetaData> findPlugins(const QString &directory, std::function<bool(const KPluginMetaData &)> filter = {});
+
+    /**
+     * @since 5.91
+     */
+    static QVector<KPluginMetaData> findPlugins(const QString &directory, std::function<bool(const KPluginMetaData &)> filter, KPluginMetaDataOption option);
 
     /**
      * @return whether this object holds valid information about a plugin.
@@ -385,6 +424,12 @@ public:
      */
     QString website() const;
 
+    /**
+     * @return the website where people can report a bug found in this plugin
+     * @since 5.99
+     */
+    QString bugReportUrl() const;
+
 #if KCOREADDONS_ENABLE_DEPRECATED_SINCE(5, 79)
     /**
      * @return a list of plugins that this plugin depends on so that it can function properly
@@ -502,9 +547,9 @@ public:
      */
     int value(const QString &key, int defaultValue) const;
 
-    /** @return the value for @p key inside @p jo as a string list. If the type of @p key is string, a list with containing
-     * just that string will be returned, if it is an array the list will contain one entry for each array member.
-     * If the key cannot be found an empty list will be returned.
+    /** @return the value for @p key from the metadata or @p defaultValue if the key does not exist.
+     * If the type of @p key is string, a list containing just that string will be returned.
+     * If the type is array, the list will contain one entry for each array member.
      * @overload
      * @since 5.88
      */
@@ -567,13 +612,17 @@ public:
 
 private:
     QJsonObject rootObject() const;
+#if KCOREADDONS_BUILD_DEPRECATED_SINCE(5, 92)
     void loadFromDesktopFile(const QString &file, const QStringList &serviceTypes);
+#endif
+    void loadFromJsonFile(const QString &file);
 
 private:
     QVariantList authorsVariant() const;
     QVariantList translatorsVariant() const;
     QVariantList otherContributorsVariant() const;
     QStaticPlugin staticPlugin() const;
+    QString requestedFileName() const;
 
     QJsonObject m_metaData;
     QString m_fileName;

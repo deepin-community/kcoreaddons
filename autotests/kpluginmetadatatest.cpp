@@ -119,6 +119,7 @@ private Q_SLOTS:
         QCOMPARE(fromKPluginLoader, fromRawData);
         QCOMPARE(fromFullPath, fromKPluginLoader);
         QCOMPARE(fromRawData, fromKPluginLoader);
+        QVERIFY(!KPluginMetaData(KPluginLoader(QStringLiteral("doesnotexist"))).isValid());
 #endif
 
         QVERIFY(fromQPluginLoader.isValid());
@@ -138,12 +139,14 @@ private Q_SLOTS:
         QCOMPARE(fromQPluginLoader, fromFullPath);
         QCOMPARE(fromQPluginLoader, fromRawData);
 
-
         QCOMPARE(fromFullPath, fromQPluginLoader);
         QCOMPARE(fromFullPath, fromRawData);
 
         QCOMPARE(fromRawData, fromQPluginLoader);
         QCOMPARE(fromRawData, fromFullPath);
+
+        QVERIFY(!KPluginMetaData(QPluginLoader(QStringLiteral("doesnotexist"))).isValid());
+        QVERIFY(!KPluginMetaData(QJsonObject(), QString()).isValid());
     }
 
     void testAllKeys()
@@ -283,10 +286,11 @@ private Q_SLOTS:
         QCOMPARE(data.value(QStringLiteral("Object"), QStringList()), QStringList());
     }
 
+#if KCOREADDONS_BUILD_DEPRECATED_SINCE(5, 91)
     void testFromDesktopFile()
     {
         const QString dfile = QFINDTESTDATA("data/fakeplugin.desktop");
-        KPluginMetaData md(dfile);
+        KPluginMetaData md = KPluginMetaData::fromDesktopFile(dfile);
         QVERIFY(md.isValid());
         QCOMPARE(md.pluginId(), QStringLiteral("fakeplugin"));
         QCOMPARE(md.fileName(), QStringLiteral("fakeplugin"));
@@ -311,7 +315,7 @@ private Q_SLOTS:
         QCOMPARE(md.formFactors(), QStringList() << QStringLiteral("mediacenter") << QStringLiteral("desktop"));
 
         const QString dfilehidden = QFINDTESTDATA("data/hiddenplugin.desktop");
-        KPluginMetaData mdhidden(dfilehidden);
+        KPluginMetaData mdhidden = KPluginMetaData::fromDesktopFile(dfilehidden);
         QVERIFY(mdhidden.isValid());
         QCOMPARE(mdhidden.isHidden(), true);
     }
@@ -346,8 +350,11 @@ private Q_SLOTS:
         QVERIFY(!typesPath.isEmpty());
         const QString inputPath = QFINDTESTDATA("data/servicetypes/example-input.desktop");
         QVERIFY(!inputPath.isEmpty());
-        QTest::ignoreMessage(QtWarningMsg,
-                             qPrintable(QStringLiteral("Unable to find service type for service \"bar/foo\" listed in \"") + inputPath + QLatin1Char('"')));
+        QTest::ignoreMessage(
+            QtWarningMsg,
+            // We also print out a list of paths we searched in. With the ".+" we ensure that they are printed out,
+            // but don't make fragile assumptions on the exact message
+            QRegularExpression(QStringLiteral("Unable to find service type for service \"bar/foo\" listed in \"") + inputPath + QLatin1String("\" .+")));
         KPluginMetaData md = KPluginMetaData::fromDesktopFile(inputPath, QStringList() << typesPath);
         QVERIFY(md.isValid());
         QCOMPARE(md.name(), QStringLiteral("Example"));
@@ -415,11 +422,12 @@ private Q_SLOTS:
         QCOMPARE(md.rawData().value(QStringLiteral("InvalidType")), QJsonValue(QStringLiteral("18"))); // Type= is invalid -> fall back to string
         QCOMPARE(md.rawData().value(QStringLiteral("ThisIsOkayAgain")), QJsonValue(19)); // valid definition after invalid ones should still work -> integer
     }
+#endif
 
     void testJSONMetadata()
     {
         const QString inputPath = QFINDTESTDATA("data/testmetadata.json");
-        KPluginMetaData md(inputPath);
+        KPluginMetaData md = KPluginMetaData::fromJsonFile(inputPath);
         QVERIFY(md.isValid());
         QCOMPARE(md.name(), QStringLiteral("Test"));
 
@@ -436,6 +444,78 @@ private Q_SLOTS:
         QVERIFY(!md.value(QStringLiteral("SomeBoolThatIsFalse"), true));
         QVERIFY(md.value(QStringLiteral("SomeBoolAsString"), false));
         QVERIFY(md.value(QStringLiteral("DoesNotExist"), true));
+    }
+
+    void testPathIsAbsolute_data()
+    {
+        QTest::addColumn<QString>("inputAbsolute");
+        QTest::addColumn<QString>("pluginPath");
+
+#if KCOREADDONS_BUILD_DEPRECATED_SINCE(5, 91)
+        // The .desktop file has X-KDE-Library, so .fileName() returns  different file
+        QTest::newRow("desktop") << QFINDTESTDATA("data/fakeplugin.desktop") << QStringLiteral("fakeplugin");
+#endif
+        // But for the .json based plugin both are the same.
+        QTest::newRow("json") << QFINDTESTDATA("data/testmetadata.json") << QFINDTESTDATA("data/testmetadata.json");
+        // And also for the library with embedded JSON metadata.
+        QPluginLoader shlibLoader(QCoreApplication::applicationDirPath() + QStringLiteral("/jsonplugin"));
+        QVERIFY2(!shlibLoader.fileName().isEmpty(), "Could not find jsonplugin");
+        QString shlibPath = QFileInfo(shlibLoader.fileName()).absoluteFilePath();
+        QTest::newRow("library") << shlibPath << shlibPath;
+    }
+
+    void testPathIsAbsolute()
+    {
+        // Test that the fileName() accessor always returns an absolute path if it was used.
+        QFETCH(QString, inputAbsolute);
+        QVERIFY2(QDir::isAbsolutePath(inputAbsolute), qPrintable(inputAbsolute));
+        QFETCH(QString, pluginPath);
+
+        const auto createMetaData = [](const QString &path) {
+#if KCOREADDONS_BUILD_DEPRECATED_SINCE(5, 91)
+            return KPluginMetaData(path);
+#else
+            if (path.endsWith(QLatin1String(".json"))) {
+                return KPluginMetaData::fromJsonFile(path);
+            } else {
+                return KPluginMetaData(path);
+            }
+#endif
+        };
+
+        KPluginMetaData mdAbsolute = createMetaData(inputAbsolute);
+        QVERIFY(mdAbsolute.isValid());
+        QCOMPARE(mdAbsolute.metaDataFileName(), inputAbsolute);
+        QCOMPARE(mdAbsolute.fileName(), pluginPath);
+
+        // All files that have been opened should be stored as absolute paths.
+        QString inputRelative;
+        if (QLibrary::isLibrary(inputAbsolute)) {
+            // We have a plugin without namespace, with the code path below we would end up with
+            // a path relative to the PWD, but we want to check a path relative to the plugin dir.
+            // Because of that we simply use the baseName of the file.
+            inputRelative = QFileInfo(inputAbsolute).baseName();
+        } else {
+            inputRelative = QDir::current().relativeFilePath(inputAbsolute);
+        }
+        QVERIFY2(QDir::isRelativePath(inputRelative), qPrintable(inputRelative));
+        KPluginMetaData mdRelative = createMetaData(inputRelative);
+        QVERIFY(mdRelative.isValid());
+        QCOMPARE(mdRelative.metaDataFileName(), inputAbsolute);
+        QCOMPARE(mdRelative.fileName(), pluginPath);
+
+        // Check that creating it with the parsed JSON object and a path keeps the path unchanged
+        const QJsonObject json = mdAbsolute.rawData();
+        QString pluginRelative = QDir::current().relativeFilePath(pluginPath);
+        QVERIFY2(QDir::isRelativePath(pluginRelative), qPrintable(pluginRelative));
+        // TODO: KF6: no need to test both constructors once they are merged into one overload.
+        KPluginMetaData mdFromJson1(json, pluginRelative, inputRelative);
+        QCOMPARE(mdFromJson1.metaDataFileName(), inputRelative);
+        // We should not be normalizing files that have not been openened, so both arguments should be unchanged.
+        QCOMPARE(mdFromJson1.fileName(), pluginRelative);
+        KPluginMetaData mdFromJson2(json, inputRelative);
+        QCOMPARE(mdFromJson2.metaDataFileName(), inputRelative);
+        QCOMPARE(mdFromJson2.fileName(), inputRelative);
     }
 
     void testFindPlugins()
@@ -554,6 +634,80 @@ private Q_SLOTS:
 
         QCOMPARE(plugins.first().description(), QStringLiteral("This is a plugin"));
         QCOMPARE(plugins.first().fileName(), QStringLiteral("staticnamespace/static_jsonplugin_cmake_macro"));
+    }
+
+    void testPluginsWithoutMetaData()
+    {
+        KPluginMetaData emptyMetaData(QStringLiteral("namespace/pluginwithoutmetadata"), KPluginMetaData::AllowEmptyMetaData);
+        QVERIFY(emptyMetaData.isValid());
+        QCOMPARE(emptyMetaData.pluginId(), QStringLiteral("pluginwithoutmetadata"));
+
+        const auto plugins = KPluginMetaData::findPlugins(QStringLiteral("namespace"), {}, KPluginMetaData::AllowEmptyMetaData);
+        QCOMPARE(plugins.count(), 2);
+        for (auto plugin : plugins) {
+            if (plugin.pluginId() == QLatin1String("pluginwithoutmetadata")) {
+                QVERIFY(plugin.isValid());
+                QVERIFY(plugin.rawData().isEmpty());
+            } else if (plugin.pluginId() == QLatin1String("jsonplugin_cmake_macro")) {
+                QVERIFY(plugin.isValid());
+                QVERIFY(!plugin.rawData().isEmpty());
+            } else {
+                Q_UNREACHABLE();
+            }
+        }
+    }
+
+    void testStaticPluginsWithoutMetadata()
+    {
+        QVERIFY(KPluginMetaData::findPlugins(QStringLiteral("staticnamespace3")).isEmpty());
+        const auto plugins = KPluginMetaData::findPlugins(QStringLiteral("staticnamespace3"), {}, KPluginMetaData::AllowEmptyMetaData);
+        QCOMPARE(plugins.count(), 1);
+        QVERIFY(plugins.first().isValid());
+        QCOMPARE(plugins.first().pluginId(), QStringLiteral("static_plugin_without_metadata"));
+    }
+
+    void testReverseDomainNotationPluginId()
+    {
+        KPluginMetaData data(QStringLiteral("org.kde.test"));
+        QVERIFY(data.isValid());
+        QCOMPARE(data.pluginId(), QStringLiteral("org.kde.test"));
+    }
+
+    void testFindingPluginInAppDirFirst()
+    {
+        const QString originalPluginPath = QPluginLoader(QStringLiteral("namespace/jsonplugin_cmake_macro")).fileName();
+        const QString pluginFileName = QFileInfo(originalPluginPath).fileName();
+        const QString pluginNamespace = QStringLiteral("somepluginnamespace");
+        const QString pluginAppDir = QCoreApplication::applicationDirPath() + QLatin1Char('/') + pluginNamespace;
+        QDir(pluginAppDir).mkpath(QStringLiteral("."));
+        const QString pluginAppPath = pluginAppDir + QLatin1Char('/') + pluginFileName;
+        QFile::remove(pluginAppPath);
+
+        QVERIFY(QFile::copy(originalPluginPath, pluginAppPath));
+
+        QTemporaryDir temp;
+        QVERIFY(temp.isValid());
+        QDir dir(temp.path());
+        QVERIFY(dir.mkdir(pluginNamespace));
+        QVERIFY(dir.cd(pluginNamespace));
+
+        const QString pluginInNamespacePath = dir.absoluteFilePath(pluginFileName);
+        QVERIFY(QFile::copy(originalPluginPath, pluginInNamespacePath));
+
+        LibraryPathRestorer restorer(QCoreApplication::libraryPaths());
+        QCoreApplication::setLibraryPaths(QStringList() << temp.path());
+
+        // Our plugin in the applicationDirPath should come first
+        const QString relativePathWithNamespace = QStringLiteral("somepluginnamespace/jsonplugin_cmake_macro");
+        KPluginMetaData data(relativePathWithNamespace);
+        QVERIFY(data.isValid());
+        QCOMPARE(data.fileName(), pluginAppPath);
+
+        // The other one must be valid
+        QVERIFY(KPluginMetaData(pluginInNamespacePath).isValid());
+        // And after removing the plugin in the applicationDirPath, it should be found
+        QVERIFY(QFile::remove(pluginAppPath));
+        QCOMPARE(KPluginMetaData(relativePathWithNamespace).fileName(), pluginInNamespacePath);
     }
 };
 

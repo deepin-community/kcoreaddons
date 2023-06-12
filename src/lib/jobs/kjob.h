@@ -28,9 +28,8 @@ class KJobPrivate;
  * \code
  * void SomeClass::methodWithAsynchronousJobCall()
  * {
- *   KJob* job = someoperation(some parameters);
- *   connect(job, &KJob::result,
- *           this, &SomeClass::handleResult);
+ *   KJob *job = someoperation(some parameters);
+ *   connect(job, &KJob::result, this, &SomeClass::handleResult);
  *   job->start();
  * }
  * \endcode
@@ -61,17 +60,15 @@ class KJobPrivate;
  * }
  * \endcode
  *
- * Subclasses must implement start(), which should trigger
- * the execution of the job (although the work should be
- * done asynchronously). errorString() should also be
- * reimplemented by any subclasses that introduce new
- * error codes.
+ * Subclasses must implement start(), which should trigger the execution of
+ * the job (although the work should be done asynchronously). errorString()
+ * should also be reimplemented by any subclasses that introduce new error
+ * codes.
  *
- * @note KJob and its subclasses are meant to be used
- * in a fire-and-forget way. Jobs will delete themselves
- * when they finish using deleteLater() (although this
- * behaviour can be changed), so a job instance will
- * disappear after the next event loop run.
+ * @note KJob and its subclasses are meant to be used in a fire-and-forget way.
+ * Jobs will delete themselves when they finish using deleteLater() (although
+ * this behaviour can be changed), so a job instance will disappear after the
+ * next event loop run.
  */
 class KCOREADDONS_EXPORT KJob : public QObject
 {
@@ -79,7 +76,7 @@ class KCOREADDONS_EXPORT KJob : public QObject
     Q_PROPERTY(int error READ error NOTIFY result)
     Q_PROPERTY(QString errorText READ errorText NOTIFY result)
     Q_PROPERTY(QString errorString READ errorString NOTIFY result)
-    Q_PROPERTY(ulong percent READ percent NOTIFY percent) // KF6 TODO: make "int", is enough
+    Q_PROPERTY(ulong percent READ percent NOTIFY percentChanged) // KF6 TODO: make "int", is enough
     Q_PROPERTY(Capabilities capabilities READ capabilities CONSTANT)
 
 public:
@@ -348,12 +345,19 @@ public:
     unsigned long percent() const;
 
     /**
-     * set the auto-delete property of the job. If @p autodelete is
-     * set to false the job will not delete itself once it is finished.
+     * Sets the auto-delete property of the job. If @p autodelete is
+     * set to @c false the job will not delete itself once it is finished.
      *
-     * The default for any KJob is to automatically delete itself.
+     * The default for any KJob is to automatically delete itself, which
+     * implies that the job was created on the heap (using <tt>new</tt>).
+     * If the job is created on the stack (which isn't the typical use-case
+     * for a job) then you must set auto-delete to @c false, otherwise you
+     * could get a crash when the job finishes and tries to delete itself.
      *
-     * @param autodelete set to false to disable automatic deletion
+     * @note If you set auto-delete to @c false then you need to kill the
+     * job manually, ideally by calling kill().
+     *
+     * @param autodelete set to @c false to disable automatic deletion
      * of the job.
      */
     void setAutoDelete(bool autodelete);
@@ -367,12 +371,49 @@ public:
      */
     bool isAutoDelete() const;
 
+    /**
+     * This method can be used to indicate to classes listening to signals from a job
+     * that they should ideally show a progress bar, but not a finished notification.
+     *
+     * For example when opening a remote URL, a job will emit the progress of the
+     * download, which can be used to show a progress dialog or a Plasma notification,
+     * then when the job is done it'll emit e.g. the finished signal. Showing the user the
+     * progress dialog is useful, however the dialog/notification about the download being
+     * finished isn't of much interest, because the user can see the application that invoked
+     * the job opening the actual file that was downloaded.
+     *
+     * @since 5.92
+     */
+    void setFinishedNotificationHidden(bool hide = true);
+
+    /**
+     * Whether to <em>not</em> show a finished notification when a job's finished
+     * signal is emitted.
+     *
+     * @see setFinishedNotificationHidden()
+     *
+     * @since 5.92
+     */
+    bool isFinishedNotificationHidden() const;
+
+    /**
+     * Returns @c true if this job was started with exec(), which starts a nested event-loop
+     * (with QEventLoop::ExcludeUserInputEvents, which blocks the GUI), otherwise returns
+     * @c false which indicates this job was started asynchronously with start().
+     *
+     * This is useful for code that for example shows a dialog to ask the user a question,
+     * and that would be no-op since the user cannot interact with the dialog.
+     *
+     * @since 5.95
+     */
+    bool isStartedWithExec() const;
+
 Q_SIGNALS:
     /**
      * Emitted when the job is finished, in any case. It is used to notify
      * observers that the job is terminated and that progress can be hidden.
      *
-     * @since 5.75: this signal is guaranteed to be emitted exactly once.
+     * Since 5.75 this signal is guaranteed to be emitted exactly once.
      *
      * This is a private signal, it can't be emitted directly by subclasses of
      * KJob, use emitResult() instead.
@@ -427,7 +468,7 @@ Q_SIGNALS:
     /**
      * Emitted when the job is finished (except when killed with KJob::Quietly).
      *
-     * @since 5.75: this signal is guaranteed to be emitted at most once.
+     * Since 5.75 this signal is guaranteed to be emitted at most once.
      *
      * Use error to know if the job was finished with error.
      *
@@ -520,10 +561,13 @@ Q_SIGNALS:
      *
      * @since 5.80
      */
-    void totalAmountChanged(KJob *job, KJob::Unit unit, qulonglong amount
-    #if !defined(K_DOXYGEN)
-    , QPrivateSignal
-    #endif
+    void totalAmountChanged(KJob *job,
+                            KJob::Unit unit,
+                            qulonglong amount
+#if !defined(K_DOXYGEN)
+                            ,
+                            QPrivateSignal
+#endif
     );
 
 #if KCOREADDONS_ENABLE_DEPRECATED_SINCE(5, 80)
@@ -560,10 +604,13 @@ Q_SIGNALS:
      *
      * @since 5.80
      */
-    void processedAmountChanged(KJob *job, KJob::Unit unit, qulonglong amount
-    #if !defined(K_DOXYGEN)
-    , QPrivateSignal
-    #endif
+    void processedAmountChanged(KJob *job,
+                                KJob::Unit unit,
+                                qulonglong amount
+#if !defined(K_DOXYGEN)
+                                ,
+                                QPrivateSignal
+#endif
     );
 
     /**
@@ -627,10 +674,12 @@ Q_SIGNALS:
      *
      * @since 5.80
      */
-    void percentChanged(KJob *job, unsigned long percent
-    #if !defined(K_DOXYGEN)
-    , QPrivateSignal
-    #endif
+    void percentChanged(KJob *job,
+                        unsigned long percent
+#if !defined(K_DOXYGEN)
+                        ,
+                        QPrivateSignal
+#endif
     );
 
     /**
@@ -652,6 +701,7 @@ protected:
      * @see finished()
      * @since 5.75
      */
+    // KF6 TODO: make public. Useful at least for unittests that run multiple jobs in parallel.
     bool isFinished() const;
 
     /**

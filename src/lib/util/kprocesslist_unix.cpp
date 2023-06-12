@@ -18,8 +18,8 @@
  * procstat-based code in `kprocesslist_unix_procstat.cpp`.
  */
 
-#include "kprocesslist.h"
 #include "kcoreaddons_debug.h"
+#include "kprocesslist.h"
 
 #include <QDebug>
 #include <QDir>
@@ -35,12 +35,9 @@ namespace
 {
 bool isUnixProcessId(const QString &procname)
 {
-    for (int i = 0; i != procname.size(); ++i) {
-        if (!procname.at(i).isDigit()) {
-            return false;
-        }
-    }
-    return true;
+    return std::none_of(procname.cbegin(), procname.cend(), [](const QChar ch) {
+        return !ch.isDigit();
+    });
 }
 
 // Determine UNIX processes by running ps
@@ -55,16 +52,7 @@ KProcessInfoList unixProcessListPS()
         // command goes last, otherwise it is cut off
         QStringLiteral("pid state user comm command"),
 #else
-#ifdef Q_OS_FREEBSD
-        // "comm" is the bare command, e.g. "bash", "plasmashell", "ps"
-        // "args" is the command and arguments, e.g. "ps -e -o pid,state,user,comm,args"
-        //
-        // Keyword "cmd" is unknown, and "command" spits out the entire
-        // environment of the process as well.
-        QStringLiteral("pid,state,user,comm,args"),
-#else
         QStringLiteral("pid,state,user,comm,cmd"),
-#endif
 #endif
     };
     psProcess.start(QStringLiteral("ps"), args);
@@ -113,11 +101,7 @@ bool getProcessInfo(const QString &procId, KProcessInfo &processInfo)
     if (!isUnixProcessId(procId)) {
         return false;
     }
-#ifdef Q_OS_FREEBSD
-    QString statusFileName(QStringLiteral("/status"));
-#else
     QString statusFileName(QStringLiteral("/stat"));
-#endif
     QString filename = QStringLiteral("/proc/");
     filename += procId;
     filename += statusFileName;
@@ -178,10 +162,6 @@ KProcessInfoList KProcessList::processInfoList()
         return unixProcessListPS();
     }
     const QStringList procIds = procDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
-#ifdef Q_OS_FREEBSD
-    if (procIds.isEmpty())
-        return unixProcessListPS();
-#endif
     KProcessInfoList rc;
     rc.reserve(procIds.size());
     for (const QString &procId : procIds) {

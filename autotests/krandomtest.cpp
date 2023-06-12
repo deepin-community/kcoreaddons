@@ -69,7 +69,7 @@ static bool getChildRandSeq(intSequenceType &seq)
 
     char c;
     childStream >> c;
-    return c == '\n' && childStream.status() == QTextStream::Ok;
+    return c == '@' && childStream.status() == QTextStream::Ok;
 }
 #endif
 
@@ -258,14 +258,14 @@ static void childGenRandom(int count)
         std::cout << KRandom::random() << ' ';
     }
 
-    std::cout << KRandom::random() << '\n';
+    std::cout << KRandom::random() << '@';
     exit(0);
 }
 #endif
 
 // Manually implemented to dispatch to child process if needed to support
 // subtests
-int main(int argc, char *argv[])
+int main([[maybe_unused]] int argc, char *argv[])
 {
 #if KCOREADDONS_BUILD_DEPRECATED_SINCE(5, 72)
     if (argc > 1) {
