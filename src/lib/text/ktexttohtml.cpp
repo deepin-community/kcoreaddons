@@ -17,8 +17,6 @@
 
 #include <limits.h>
 
-#include "kcoreaddons_debug.h"
-
 static KTextToHTMLEmoticonsInterface *s_emoticonsInterface = nullptr;
 
 static void loadEmoticonsPlugin()
@@ -32,7 +30,7 @@ static void loadEmoticonsPlugin()
         // because we cannot load the FrameworkIntegration plugin into a
         // QCoreApplication, as it would crash immediately
         if (qApp->metaObject()->indexOfProperty("platformName") > -1) {
-            QPluginLoader lib(QStringLiteral("kf5/KEmoticonsIntegrationPlugin"));
+            QPluginLoader lib(QStringLiteral("kf" QT_STRINGIFY(QT_VERSION_MAJOR) "/KEmoticonsIntegrationPlugin"));
             QObject *rootObj = lib.instance();
             if (rootObj) {
                 s_emoticonsInterface = rootObj->property(KTEXTTOHTMLEMOTICONS_PROPERTY).value<KTextToHTMLEmoticonsInterface *>();
@@ -139,7 +137,15 @@ QString KTextToHTMLHelper::getPhoneNumber()
 
     // this isn't 100% accurate, we filter stuff below that is too hard to capture with a regexp
     static const QRegularExpression telPattern(QStringLiteral(R"([+0](( |( ?[/-] ?)?)\(?\d+\)?+){6,30})"));
-    const auto match = telPattern.match(mText, mPos, QRegularExpression::NormalMatch, QRegularExpression::AnchoredMatchOption);
+    const auto match = telPattern.match(mText,
+                                        mPos,
+                                        QRegularExpression::NormalMatch,
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+                                        QRegularExpression::AnchoredMatchOption
+#else
+                                        QRegularExpression::AnchorAtOffsetMatchOption
+#endif
+    );
     if (match.hasMatch()) {
         QStringView matchedText = match.capturedView();
         // check for maximum number of digits (15), see https://en.wikipedia.org/wiki/Telephone_numbering_plan
@@ -411,7 +417,15 @@ QString KTextToHTMLHelper::highlightedText()
 
     QRegularExpression re(QStringLiteral("\\%1([^\\s|^\\%1].*[^\\s|^\\%1])\\%1").arg(ch));
     re.setPatternOptions(QRegularExpression::InvertedGreedinessOption);
-    const auto match = re.match(mText, mPos, QRegularExpression::NormalMatch, QRegularExpression::AnchoredMatchOption);
+    const auto match = re.match(mText,
+                                mPos,
+                                QRegularExpression::NormalMatch,
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+                                QRegularExpression::AnchoredMatchOption
+#else
+                                QRegularExpression::AnchorAtOffsetMatchOption
+#endif
+    );
 
     if (match.hasMatch()) {
         if (match.capturedStart() == mPos) {
@@ -513,9 +527,7 @@ QString KTextToHTML::convertToHtml(const QString &plainText, const KTextToHTML::
                 str = helper.getUrl(&badUrl);
                 if (badUrl) {
                     QString resultBadUrl;
-                    const int helperTextSize(helper.mText.count());
-                    for (int i = 0; i < helperTextSize; ++i) {
-                        const QChar chBadUrl = helper.mText.at(i);
+                    for (const QChar chBadUrl : std::as_const(helper.mText)) {
                         if (chBadUrl == QLatin1Char('&')) {
                             resultBadUrl += QLatin1String("&amp;");
                         } else if (chBadUrl == QLatin1Char('"')) {

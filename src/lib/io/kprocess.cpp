@@ -2,10 +2,12 @@
     This file is part of the KDE libraries
 
     SPDX-FileCopyrightText: 2007 Oswald Buddenhagen <ossi@kde.org>
+    SPDX-FileCopyrightText: 2022 Harald Sitter <sitter@kde.org>
 
     SPDX-License-Identifier: LGPL-2.0-or-later
 */
 
+#include "kcoreaddons_debug.h"
 #include "kprocess_p.h"
 
 #include <QStandardPaths>
@@ -72,15 +74,17 @@ void KProcess::setEnv(const QString &name, const QString &value, bool overwrite)
     }
     QString fname(name);
     fname.append(QLatin1Char('='));
-    for (QStringList::Iterator it = env.begin(); it != env.end(); ++it) {
-        if ((*it).startsWith(fname)) {
-            if (overwrite) {
-                *it = fname.append(value);
-                setEnvironment(env);
-            }
-            return;
+    auto it = std::find_if(env.begin(), env.end(), [&fname](const QString &s) {
+        return s.startsWith(fname);
+    });
+    if (it != env.end()) {
+        if (overwrite) {
+            *it = fname.append(value);
+            setEnvironment(env);
         }
+        return;
     }
+
     env.append(fname.append(value));
     setEnvironment(env);
 }
@@ -94,24 +98,23 @@ void KProcess::unsetEnv(const QString &name)
     }
     QString fname(name);
     fname.append(QLatin1Char('='));
-    for (QStringList::Iterator it = env.begin(); it != env.end(); ++it) {
-        if ((*it).startsWith(fname)) {
-            env.erase(it);
-            if (env.isEmpty()) {
-                env.append(QStringLiteral(DUMMYENV));
-            }
-            setEnvironment(env);
-            return;
+
+    auto it = std::find_if(env.begin(), env.end(), [&fname](const QString &s) {
+        return s.startsWith(fname);
+    });
+    if (it != env.end()) {
+        env.erase(it);
+        if (env.isEmpty()) {
+            env.append(QStringLiteral(DUMMYENV));
         }
+        setEnvironment(env);
     }
 }
 
 void KProcess::setProgram(const QString &exe, const QStringList &args)
 {
-    Q_D(KProcess);
-
-    d->prog = exe;
-    d->args = args;
+    QProcess::setProgram(exe);
+    QProcess::setArguments(args);
 #ifdef Q_OS_WIN
     setNativeArguments(QString());
 #endif
@@ -119,11 +122,15 @@ void KProcess::setProgram(const QString &exe, const QStringList &args)
 
 void KProcess::setProgram(const QStringList &argv)
 {
-    Q_D(KProcess);
+    if (argv.isEmpty()) {
+        qCWarning(KCOREADDONS_DEBUG) << "KProcess::setProgram(const QStringList &argv) called on an empty string list, no process will be started.";
+        clearProgram();
+        return;
+    }
 
-    Q_ASSERT(!argv.isEmpty());
-    d->args = argv;
-    d->prog = d->args.takeFirst();
+    QStringList args = argv;
+    QProcess::setProgram(args.takeFirst());
+    QProcess::setArguments(args);
 #ifdef Q_OS_WIN
     setNativeArguments(QString());
 #endif
@@ -131,49 +138,49 @@ void KProcess::setProgram(const QStringList &argv)
 
 KProcess &KProcess::operator<<(const QString &arg)
 {
-    Q_D(KProcess);
-
-    if (d->prog.isEmpty()) {
-        d->prog = arg;
+    if (QProcess::program().isEmpty()) {
+        QProcess::setProgram(arg);
     } else {
-        d->args << arg;
+        setArguments(arguments() << arg);
     }
     return *this;
 }
 
 KProcess &KProcess::operator<<(const QStringList &args)
 {
-    Q_D(KProcess);
-
-    if (d->prog.isEmpty()) {
+    if (QProcess::program().isEmpty()) {
         setProgram(args);
     } else {
-        d->args << args;
+        setArguments(arguments() << args);
     }
     return *this;
 }
 
 void KProcess::clearProgram()
 {
-    Q_D(KProcess);
-
-    d->prog.clear();
-    d->args.clear();
+    QProcess::setProgram({});
+    QProcess::setArguments({});
 #ifdef Q_OS_WIN
     setNativeArguments(QString());
 #endif
 }
 
+// #ifdef NON_FREE // ... as they ship non-POSIX /bin/sh
+#if !defined(__linux__) && !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__) && !defined(__DragonFly__) && !defined(__GNU__)              \
+    && !defined(__APPLE__)
+const static bool s_nonFreeUnix = true;
+#else
+const static bool s_nonFreeUnix = false;
+#endif
+
 void KProcess::setShellCommand(const QString &cmd)
 {
-    Q_D(KProcess);
-
-    KShell::Errors err;
-    d->args = KShell::splitArgs(cmd, KShell::AbortOnMeta | KShell::TildeExpand, &err);
-    if (err == KShell::NoError && !d->args.isEmpty()) {
-        d->prog = QStandardPaths::findExecutable(d->args[0]);
-        if (!d->prog.isEmpty()) {
-            d->args.removeFirst();
+    KShell::Errors err = KShell::NoError;
+    auto args = KShell::splitArgs(cmd, KShell::AbortOnMeta | KShell::TildeExpand, &err);
+    if (err == KShell::NoError && !args.isEmpty()) {
+        QProcess::setProgram(QStandardPaths::findExecutable(args.takeFirst()));
+        if (!QProcess::program().isEmpty()) {
+            setArguments(args);
 #ifdef Q_OS_WIN
             setNativeArguments(QString());
 #endif
@@ -181,39 +188,33 @@ void KProcess::setShellCommand(const QString &cmd)
         }
     }
 
-    d->args.clear();
+    setArguments({});
 
 #ifdef Q_OS_UNIX
-// #ifdef NON_FREE // ... as they ship non-POSIX /bin/sh
-#if !defined(__linux__) && !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__) && !defined(__DragonFly__) && !defined(__GNU__)              \
-    && !defined(__APPLE__)
-    // If /bin/sh is a symlink, we can be pretty sure that it points to a
-    // POSIX shell - the original bourne shell is about the only non-POSIX
-    // shell still in use and it is always installed natively as /bin/sh.
-    d->prog = QFile::symLinkTarget(QStringLiteral("/bin/sh"));
-    if (d->prog.isEmpty()) {
-        // Try some known POSIX shells.
-        d->prog = QStandardPaths::findExecutable(QStringLiteral("ksh"));
-        if (d->prog.isEmpty()) {
-            d->prog = QStandardPaths::findExecutable(QStringLiteral("ash"));
-            if (d->prog.isEmpty()) {
-                d->prog = QStandardPaths::findExecutable(QStringLiteral("bash"));
-                if (d->prog.isEmpty()) {
-                    d->prog = QStandardPaths::findExecutable(QStringLiteral("zsh"));
-                    if (d->prog.isEmpty())
-                    // We're pretty much screwed, to be honest ...
-                    {
-                        d->prog = QStringLiteral("/bin/sh");
-                    }
+    if (s_nonFreeUnix) {
+        // If /bin/sh is a symlink, we can be pretty sure that it points to a
+        // POSIX shell - the original bourne shell is about the only non-POSIX
+        // shell still in use and it is always installed natively as /bin/sh.
+        QString shell = QFile::symLinkTarget(QStringLiteral("/bin/sh"));
+        if (shell.isEmpty()) {
+            // Try some known POSIX shells.
+            static const char *s_knownShells[] = {"ksh", "ash", "bash", "zsh"};
+            for (const auto str : s_knownShells) {
+                shell = QStandardPaths::findExecutable(QLatin1String(str));
+                if (!shell.isEmpty()) {
+                    break;
                 }
             }
         }
+        if (shell.isEmpty()) { // We're pretty much screwed, to be honest ...
+            shell = QStringLiteral("/bin/sh");
+        }
+        QProcess::setProgram(shell);
+    } else {
+        QProcess::setProgram((QStringLiteral("/bin/sh")));
     }
-#else
-    d->prog = QStringLiteral("/bin/sh");
-#endif
 
-    d->args << QStringLiteral("-c") << cmd;
+    setArguments(arguments() << QStringLiteral("-c") << cmd);
 #else // Q_OS_UNIX
     // KMacroExpander::expandMacrosShellQuote(), KShell::quoteArg() and
     // KShell::joinArgs() may generate these for security reasons.
@@ -222,11 +223,10 @@ void KProcess::setShellCommand(const QString &cmd)
 #ifndef _WIN32_WCE
     WCHAR sysdir[MAX_PATH + 1];
     UINT size = GetSystemDirectoryW(sysdir, MAX_PATH + 1);
-    d->prog = QString::fromUtf16((const ushort *)sysdir, size);
-    d->prog += QLatin1String("\\cmd.exe");
+    QProcess::setProgram(QString::fromUtf16((const ushort *)sysdir, size) + QLatin1String("\\cmd.exe"));
     setNativeArguments(QLatin1String("/V:OFF /S /C \"") + cmd + QLatin1Char('"'));
 #else
-    d->prog = QStringLiteral("\\windows\\cmd.exe");
+    QProcess::setProgram(QStringLiteral("\\windows\\cmd.exe"));
     setNativeArguments(QStringLiteral("/S /C \"") + cmd + QLatin1Char('"'));
 #endif
 #endif
@@ -234,10 +234,8 @@ void KProcess::setShellCommand(const QString &cmd)
 
 QStringList KProcess::program() const
 {
-    Q_D(const KProcess);
-
-    QStringList argv = d->args;
-    argv.prepend(d->prog);
+    QStringList argv = arguments();
+    argv.prepend(QProcess::program());
     return argv;
 }
 
@@ -245,7 +243,7 @@ void KProcess::start()
 {
     Q_D(KProcess);
 
-    QProcess::start(d->prog, d->args, d->openMode);
+    QProcess::start(d->openMode);
 }
 
 int KProcess::execute(int msecs)
@@ -277,10 +275,8 @@ int KProcess::execute(const QStringList &argv, int msecs)
 
 int KProcess::startDetached()
 {
-    Q_D(KProcess);
-
     qint64 pid;
-    if (!QProcess::startDetached(d->prog, d->args, workingDirectory(), &pid)) {
+    if (!QProcess::startDetached(QProcess::program(), QProcess::arguments(), workingDirectory(), &pid)) {
         return 0;
     }
     return static_cast<int>(pid);
@@ -299,6 +295,11 @@ int KProcess::startDetached(const QString &exe, const QStringList &args)
 // static
 int KProcess::startDetached(const QStringList &argv)
 {
+    if (argv.isEmpty()) {
+        qCWarning(KCOREADDONS_DEBUG) << "KProcess::startDetached(const QStringList &argv) called on an empty string list, no process will be started.";
+        return 0;
+    }
+
     QStringList args = argv;
     QString prog = args.takeFirst();
     return startDetached(prog, args);

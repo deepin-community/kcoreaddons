@@ -502,15 +502,17 @@ public:
         KPluginFactory::Result<KPluginFactory> factoryResult = loadFactory(data);
         if (!factoryResult.plugin) {
             result.errorString = factoryResult.errorString;
+            result.errorText = factoryResult.errorText;
             result.errorReason = factoryResult.errorReason;
             return result;
         }
         T *instance = factoryResult.plugin->create<T>(parent, args);
         if (!instance) {
-            result.errorString = tr("KPluginFactory could not load the plugin: %1").arg(data.fileName());
-            result.errorText = QStringLiteral("KPluginFactory could not load the plugin: %1").arg(data.fileName());
+            const QLatin1String className(T::staticMetaObject.className());
+            result.errorString = tr("KPluginFactory could not create a %1 instance from %2").arg(className, data.fileName());
+            result.errorText = QStringLiteral("KPluginFactory could not create a %1 instance from %2").arg(className, data.fileName());
             result.errorReason = INVALID_KPLUGINFACTORY_INSTANTIATION;
-            logFailedInstantiationMessage(data);
+            logFailedInstantiationMessage(T::staticMetaObject.className(), data);
         } else {
             result.plugin = instance;
         }
@@ -557,11 +559,11 @@ public:
      * @param parentWidget an additional parent widget.
      * @param parent the parent of the object. If @p parent is a widget type, it will also passed
      *               to the parentWidget argument of the CreateInstanceFunction for the object.
-     * @param args additional arguments which will be passed to the object.
+     * @param args additional arguments which will be passed to the object. Since 5.93 this has a default arg.
      * @returns pointer to the created object is returned, or @c nullptr if an error occurred.
      */
     template<typename T>
-    T *create(QWidget *parentWidget, QObject *parent, const QVariantList &args);
+    T *create(QWidget *parentWidget, QObject *parent, const QVariantList &args = {});
 
 #if KCOREADDONS_ENABLE_DEPRECATED_SINCE(5, 89)
     /**
@@ -571,7 +573,7 @@ public:
      */
     template<typename T>
     KCOREADDONS_DEPRECATED_VERSION(5, 89, "Use overload without keyword instead")
-    T *create(QWidget *parentWidget, QObject *parent, const QString &keyword = QString(), const QVariantList &args = QVariantList());
+    T *create(QWidget *parentWidget, QObject *parent, const QString &keyword, const QVariantList &args = QVariantList());
 #endif
 
 #if KCOREADDONS_ENABLE_DEPRECATED_SINCE(4, 0)
@@ -714,7 +716,7 @@ protected:
      * @deprecated Since 5.89, providing a custom CreateInstanceFunction is deprecated. Use registerPlugin<T>() instead
      */
     template<class T>
-    KCOREADDONS_DEPRECATED_VERSION(5, 89, "Providing a custom CreateInstanceFunction is deprecated. Use registerPlugin<T>() instead")
+    KCOREADDONS_DEPRECATED_VERSION_BELATED(5, 89, 5, 95, "Use registerPlugin(CreateInstanceWithMetaDataFunction) instead")
     void registerPlugin(const QString &keyword, CreateInstanceFunction instanceFunction)
     {
         registerPlugin(keyword, &T::staticMetaObject, instanceFunction);
@@ -815,6 +817,21 @@ protected:
         registerPlugin(QString(), &T::staticMetaObject, instanceFunction);
     }
 
+    /**
+     * Registers a plugin with the factory. Call this function from the constructor of the
+     * KPluginFactory subclass to make the create function able to instantiate the plugin when asked
+     * for an interface the plugin implements.
+     *
+     * @param T the name of the plugin class
+     * @param instanceFunction A function pointer to a function that creates an instance of the plugin.
+     * @since 5.96
+     */
+    template<class T>
+    void registerPlugin(CreateInstanceWithMetaDataFunction instanceFunction)
+    {
+        registerPlugin(QString(), &T::staticMetaObject, instanceFunction);
+    }
+
 #if KCOREADDONS_ENABLE_DEPRECATED_SINCE(5, 89)
     /**
      * @overload
@@ -903,6 +920,7 @@ private:
     void registerPlugin(const QString &keyword, const QMetaObject *metaObject, CreateInstanceWithMetaDataFunction instanceFunction);
     // The logging categories are not part of the public API, consequently this needs to be a private function
     static void logFailedInstantiationMessage(KPluginMetaData data);
+    static void logFailedInstantiationMessage(const char *className, KPluginMetaData data);
 };
 
 // Deprecation wrapper macro added only for 5.70, while backward typedef added in 4.0

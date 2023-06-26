@@ -30,6 +30,8 @@ public:
     KJobPrivate();
     virtual ~KJobPrivate();
 
+    void speedTimeout();
+
     KJob *q_ptr = nullptr;
 
     KJobUiDelegate *uiDelegate = nullptr;
@@ -53,10 +55,9 @@ public:
     KJob::Capabilities capabilities = KJob::NoCapabilities;
     bool suspended = false;
     bool isAutoDelete = true;
-
-    void speedTimeout();
-
+    bool m_hideFinishedNotification = false;
     bool isFinished = false;
+    bool m_startedWithExec = false;
 
     Q_DECLARE_PUBLIC(KJob)
 };

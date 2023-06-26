@@ -37,14 +37,21 @@ KPluginFactory::Result<KPluginFactory> KPluginFactory::loadFactory(const KPlugin
     if (data.isStaticPlugin()) {
         obj = data.staticPlugin().instance();
     } else {
+        if (data.fileName().isEmpty()) {
+            result.errorString = tr("Could not find plugin %1").arg(data.requestedFileName());
+            result.errorText = QStringLiteral("Could not find plugin %1").arg(data.requestedFileName());
+            result.errorReason = INVALID_PLUGIN;
+            qCWarning(KCOREADDONS_DEBUG) << result.errorText;
+            return result;
+        }
         QPluginLoader loader(data.fileName());
         obj = loader.instance();
         if (!obj) {
-           result.errorString = tr("Could not load plugin from %1: %2").arg(data.fileName(), loader.errorString());
-           result.errorText = QStringLiteral("Could not load plugin from %1: %2").arg(data.fileName(), loader.errorString());
-           result.errorReason = INVALID_PLUGIN;
-           qCWarning(KCOREADDONS_DEBUG) << result.errorText;
-           return result;
+            result.errorString = tr("Could not load plugin from %1: %2").arg(data.fileName(), loader.errorString());
+            result.errorText = QStringLiteral("Could not load plugin from %1: %2").arg(data.fileName(), loader.errorString());
+            result.errorReason = INVALID_PLUGIN;
+            qCWarning(KCOREADDONS_DEBUG) << result.errorText;
+            return result;
         }
     }
 
@@ -168,6 +175,10 @@ void KPluginFactory::registerPlugin(const QString &keyword, const QMetaObject *m
 void KPluginFactory::logFailedInstantiationMessage(KPluginMetaData data)
 {
     qCWarning(KCOREADDONS_DEBUG) << "KPluginFactory could not load the plugin" << data.fileName();
+}
+void KPluginFactory::logFailedInstantiationMessage(const char *className, KPluginMetaData data)
+{
+    qCWarning(KCOREADDONS_DEBUG) << "KPluginFactory could not create a" << className << "instance from" << data.fileName();
 }
 
 #if KCOREADDONS_BUILD_DEPRECATED_SINCE(4, 0)

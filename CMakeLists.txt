@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
 
-set(KF_VERSION "5.90.0") # handled by release scripts
+set(KF_VERSION "5.103.0") # handled by release scripts
 project(KCoreAddons VERSION ${KF_VERSION})
 
 include(FeatureSummary)
-find_package(ECM 5.90.0  NO_MODULE)
+find_package(ECM 5.103.0  NO_MODULE)
 set_package_properties(ECM PROPERTIES TYPE REQUIRED DESCRIPTION "Extra CMake Modules." URL "https://commits.kde.org/extra-cmake-modules")
 feature_summary(WHAT REQUIRED_PACKAGES_NOT_FOUND FATAL_ON_MISSING_REQUIRED_PACKAGES)
 
@@ -23,6 +23,7 @@ include(ECMGenerateHeaders)
 include(ECMQtDeclareLoggingCategory)
 include(ECMAddQch)
 include(ECMSetupQtPluginMacroNames)
+include(ECMDeprecationSettings)
 
 set(EXCLUDE_DEPRECATED_BEFORE_AND_AT 0 CACHE STRING "Control the range of deprecated API excluded from the build [default=0].")
 
@@ -35,7 +36,6 @@ find_package(Qt${QT_MAJOR_VERSION} ${REQUIRED_QT_VERSION} CONFIG REQUIRED Core)
 ecm_setup_qtplugin_macro_names(
     JSON_NONE
         "K_PLUGIN_FACTORY"
-    JSON_ARG1
         "K_PLUGIN_CLASS"
     JSON_ARG2
         "K_PLUGIN_FACTORY_WITH_JSON"
@@ -85,8 +85,20 @@ if (BSDLIKE)
     endif()
 endif()
 
-# Generate io/config-kdirwatch.h
+if(NOT WIN32) # never relevant there
+    find_package(Qt${QT_MAJOR_VERSION}DBus ${QT_MIN_VERSION} CONFIG)
+    set(HAVE_QTDBUS ${Qt${QT_MAJOR_VERSION}DBus_FOUND})
+    add_feature_info(XDGPortalDragAndDrop HAVE_QTDBUS "Drag and Drop support via xdg-desktop-portal requies QtDBus")
+endif()
+
+if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+    find_package(UDev) # Used by KFilesystemType
+    set(HAVE_UDEV ${UDev_FOUND})
+endif()
+
 configure_file(src/lib/io/config-kdirwatch.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/src/lib/io/config-kdirwatch.h)
+
+configure_file(src/lib/io/config-kfilesystemtype.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/src/lib/io/config-kfilesystemtype.h)
 
 include(ECMPoQmTools)
 
@@ -96,12 +108,14 @@ ecm_setup_version(PROJECT VARIABLE_PREFIX KCOREADDONS
                         SOVERSION 5)
 
 
-ecm_install_po_files_as_qm(po)
+ecm_install_po_files_as_qm(poqm)
 
 kde_enable_exceptions()
 
 
-add_definitions(-DQT_DISABLE_DEPRECATED_BEFORE=0x050e00) # Not 050f00 because of qsrand
+ecm_set_disabled_deprecation_versions(
+    QT 5.14.0 # Not 5.15 because of qsrand
+)
 
 add_subdirectory(src)
 if (BUILD_TESTING)
@@ -137,7 +151,7 @@ install(EXPORT KF5CoreAddonsTargets DESTINATION "${CMAKECONFIG_INSTALL_DIR}" FIL
 install(EXPORT KF5CoreAddonsToolingTargets DESTINATION "${CMAKECONFIG_INSTALL_DIR}" FILE KF5CoreAddonsToolingTargets.cmake NAMESPACE KF5:: )
 
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/kcoreaddons_version.h
-        DESTINATION ${KDE_INSTALL_INCLUDEDIR_KF} COMPONENT Devel )
+        DESTINATION ${KDE_INSTALL_INCLUDEDIR_KF}/KCoreAddons COMPONENT Devel)
 
 feature_summary(WHAT ALL FATAL_ON_MISSING_REQUIRED_PACKAGES)
 

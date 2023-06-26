@@ -89,8 +89,9 @@ QStringList KNetworkMounts::paths(KNetworkMountsType type) const
     if (type == Any) {
         QStringList paths;
         paths.reserve(4);
-        for (const auto type : {KNetworkMounts::NfsPaths, KNetworkMounts::SmbPaths, KNetworkMounts::SymlinkDirectory, KNetworkMounts::SymlinkToNetworkMount}) {
-            paths.append(d->m_settings->value(enumToString(type), QStringList()).toStringList());
+        for (const auto networkMountType :
+             {KNetworkMounts::NfsPaths, KNetworkMounts::SmbPaths, KNetworkMounts::SymlinkDirectory, KNetworkMounts::SymlinkToNetworkMount}) {
+            paths.append(d->m_settings->value(enumToString(networkMountType), QStringList()).toStringList());
         }
         return paths;
     } else {
@@ -115,7 +116,7 @@ void KNetworkMounts::addPath(const QString &path, KNetworkMountsType type)
 }
 
 typedef QHash<QString /*symlink*/, QString /*canonical path*/> symlinkCanonicalPathHash;
-Q_GLOBAL_STATIC(symlinkCanonicalPathHash, s_canonicalLinkSpacePaths);
+Q_GLOBAL_STATIC(symlinkCanonicalPathHash, s_canonicalLinkSpacePaths)
 
 QString KNetworkMounts::canonicalSymlinkPath(const QString &path)
 {

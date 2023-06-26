@@ -16,6 +16,7 @@ ecm_qt_declare_logging_category(desktoptojson
 target_sources(desktoptojson PRIVATE
     main.cpp
     desktoptojson.cpp
+    desktoptojson.h
     ../lib/plugin/desktopfileparser.cpp
 )
 if(NOT CMAKE_TOOLCHAIN_FILE)
@@ -29,5 +30,9 @@ ecm_mark_nongui_executable(desktoptojson)
 
 target_link_libraries(desktoptojson Qt${QT_MAJOR_VERSION}::Core)
 target_compile_definitions(desktoptojson PRIVATE BUILDING_DESKTOPTOJSON_TOOL=1)
+# Note: we add a custom TOOL_VERSION property here to enable compatibility checks when cross-compiling.
+set_target_properties(desktoptojson PROPERTIES
+        TOOL_VERSION "${KF_VERSION}"
+        EXPORT_PROPERTIES TOOL_VERSION)
 
-install(TARGETS desktoptojson EXPORT KF5CoreAddonsToolingTargets ${KF5_INSTALL_TARGETS_DEFAULT_ARGS})
+install(TARGETS desktoptojson EXPORT KF5CoreAddonsToolingTargets ${KF_INSTALL_TARGETS_DEFAULT_ARGS})

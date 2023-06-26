@@ -12,6 +12,8 @@
 
 #include <QString>
 
+#if KCOREADDONS_ENABLE_DEPRECATED_SINCE(5, 97)
+
 class KMessageHandler;
 /**
  * @brief Display an informative message using a KMessageHandler.
@@ -67,13 +69,17 @@ enum MessageType {
 
 /**
  * @brief Display a long message of a certain type.
- * A long message span on multiple lines and can have a caption.
+ * A long message span on multiple lines and can have a title.
  *
  * @param messageType Currrent type of message. See MessageType enum.
  * @param text Long message to be displayed.
- * @param caption Caption to be used. This is optional.
+ * @param title Title to be used. This is optional.
+ *
+ * @deprecated Since 5.97. Use Qt logging or custom message handling.
  */
-KCOREADDONS_EXPORT void message(KMessage::MessageType messageType, const QString &text, const QString &caption = QString());
+KCOREADDONS_EXPORT
+KCOREADDONS_DEPRECATED_VERSION(5, 97, "Use Qt logging or custom message handling.")
+void message(KMessage::MessageType messageType, const QString &text, const QString &caption = QString());
 
 /**
  * @brief Set the current KMessageHandler
@@ -83,8 +89,12 @@ KCOREADDONS_EXPORT void message(KMessage::MessageType messageType, const QString
  * @warning This function isn't thread-safe. You don't want to
  *          change the message handler during the program's
  *          execution anyways. Do so <b>only</b> at start-up.
+ *
+ * @deprecated Since 5.97. Use Qt logging or custom message handling.
  */
-KCOREADDONS_EXPORT void setMessageHandler(KMessageHandler *handler);
+KCOREADDONS_EXPORT
+KCOREADDONS_DEPRECATED_VERSION(5, 97, "Use Qt logging or custom message handling.")
+void setMessageHandler(KMessageHandler *handler);
 }
 
 /**
@@ -97,6 +107,7 @@ KCOREADDONS_EXPORT void setMessageHandler(KMessageHandler *handler);
  * KMessageHandler using KMessage::setMessageHandler()
  *
  * @author Michaël Larouche <michael.larouche@kdemail.net>
+ * @deprecated Since 5.97, technology not in use.
  */
 class KCOREADDONS_EXPORT KMessageHandler
 {
@@ -106,13 +117,15 @@ public:
     } // KF6 TODO: de-inline (-Wweak-vtables)
     /**
      * @brief Display a long message of a certain type.
-     * A long message span on multiple lines and can have a caption.
+     * A long message span on multiple lines and can have a title.
      *
      * @param type Currrent type of message. See MessageType enum.
      * @param text Long message to be displayed.
-     * @param caption Caption to be used. This is optional.
+     * @param title Title to be used. This is optional.
      */
-    virtual void message(KMessage::MessageType type, const QString &text, const QString &caption) = 0;
+    virtual void message(KMessage::MessageType type, const QString &text, const QString &title) = 0;
 };
+
+#endif
 
 #endif
